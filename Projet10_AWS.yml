@@ -1,0 +1,253 @@
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation VPC + Infrastructure Template P10
+
+Parameters:
+  VpcID:
+    Type: String
+    Description: The target VPC identifier.
+
+Resources:
+  MonVPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 172.18.1.0/24
+      Tags:
+        - Key: Name
+          Value: "MonVPC"
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-1a
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-a"
+      VpcId: !Ref MonVPC
+
+  PrivateSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-1b
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-b"
+      VpcId: !Ref MonVPC
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-1c
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-c"
+      VpcId: !Ref MonVPC
+
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-1a
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-public-a"
+      VpcId: !Ref MonVPC
+
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-1b
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-public-b"
+      VpcId: !Ref MonVPC
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "MainVPC-InternetGateway"
+
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      InternetGatewayId: !Ref InternetGateway
+
+  NatEipA:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  NatEipB:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+# TAG non supporté sur cette option, vérifier si AllocationId est supporté aussi car marche pas si on ajoute le fichier YAML dans AWS
+  NatGatewayA:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "MainVPC-nat-a"
+          # AllocationId: !GetAtt NatEipA.AllocationId
+          # SubnetId: !Ref PublicSubnetA
+
+  NatGatewayB:
+    DependsOn: AttachInternetGateway
+    Type: AWS::EC2::NatGateway
+  Properties: 
+      Tags:
+        - Key: Name
+          Value: "MainVPC-nat-b
+          # AllocationId: !GetAtt NatEipB.AllocationId
+          # SubnetId: !Ref PublicSubnetB
+
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-a
+
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-b
+
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-a
+
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-b
+
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-c
+
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref PublicSubnetA
+
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref PublicSubnetB
+
+  AttachPrivateRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
+
+  AttachPrivateRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateSubnetC
+
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA
+      MapIpPublicOnLaunch: True
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+      MapIpPublicOnLaunch: True
+
+  PrivateRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref NatGatewayA
+      RouteTableId: !Ref PrivateRouteTableA
+
+  PrivateRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref NatGatewayB
+      RouteTableId: !Ref PrivateRouteTableB
+
+  WebsiteEC2SecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref VpcID
+
+  WebsiteLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAdress: false
+      ImageId: ami-04e905a52ec8010b2
+      InstanceType: t2.micro
+      SecurityGroups:
+        -!Ref WebsiteEC2SecurityGroup
+      UserDate:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo systemctl start httpd
+
+  WebsiteScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WebsiteLaunchConfig
+      AvailabilityZones:
+        - Fn::Select:
+          - 0
+          - Fn::GetAZs: !Ref AWS::Region
+        - Fn::Select:
+          - 1
+          - Fn::GetAZs: !Ref AWS::Region
+      VPCZoneIdentifier: !Ref PublicSubnets
+      DesiredCpacity: 1
+      MaxSize: 1
+      MiniSize: 1
