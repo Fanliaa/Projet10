@@ -1,13 +1,25 @@
+#########################################################################
+#                     Projet 10 OpenClassRooms - AWS                    #
+#########################################################################
+
+# Initialisation du template
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
+
+###### Definition des parametres de notre infrastructure ######
 
 Parameters:
   VpcID:
     Type: String
     Description: The target VPC identifier.
 
+
+###### Definition des Ressources necessaires pour notre reseau ######
+
 Resources:
+
+# Creation de notre VPC
   MonVPC:
     Type: "AWS::EC2::VPC"
     Properties:
@@ -15,6 +27,8 @@ Resources:
       Tags:
         - Key: Name
           Value: "MonVPC"
+
+###### Creation de nos reseaux prives ######
 
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
@@ -46,6 +60,8 @@ Resources:
           Value: "MainVPC-private-c"
       VpcId: !Ref MonVPC
 
+###### Creation de nos reseaux publics ######
+
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -66,6 +82,8 @@ Resources:
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
 
+###### Definition de la passerelle internet ######
+
   InternetGateway:
     Type: AWS::EC2::InternetGateway
     Properties:
@@ -73,11 +91,14 @@ Resources:
         - Key: Name
           Value: "MainVPC-InternetGateway"
 
+# Rattachement de la passerelle internet
   AttachInternetGateway:
     Type: AWS::EC2::VPCGatewayAttachment
     Properties:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
+
+###### Reservation d'une Elastic IP ######
 
   NatEipA:
     Type: AWS::EC2::EIP
@@ -88,26 +109,30 @@ Resources:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
-# TAG non supporté sur cette option, vérifier si AllocationId est supporté aussi car marche pas si on ajoute le fichier YAML dans AWS
+
+###### Creation des passerelles NAT ######      
+
   NatGatewayA:
     DependsOn: AttachInternetGateway
     Type: AWS::EC2::NatGateway
     Properties:
-      Tags:
-        - Key: Name
-          Value: "MainVPC-nat-a"
-          # AllocationId: !GetAtt NatEipA.AllocationId
-          # SubnetId: !Ref PublicSubnetA
+      AllocationId: !GetAtt NatEipA.AllocationId
+      SubnetId: !Ref PublicSubnetA
+      # Tags:
+      #   - Key: Name
+      #     Value: "MainVPC-nat-a"
 
   NatGatewayB:
     DependsOn: AttachInternetGateway
     Type: AWS::EC2::NatGateway
-  Properties: 
-      Tags:
-        - Key: Name
-          Value: "MainVPC-nat-b
-          # AllocationId: !GetAtt NatEipB.AllocationId
-          # SubnetId: !Ref PublicSubnetB
+  Properties:
+    AllocationId: !GetAtt NatEipB.AllocationId
+    SubnetId: !Ref PublicSubnetB
+      # Tags:
+      #   - Key: Name
+      #     Value: "MainVPC-nat-b"
+
+###### Definition de la table de routage publique ######
 
   PublicRouteTableA:
     Type: AWS::EC2::RouteTable
@@ -124,6 +149,8 @@ Resources:
       Tags:
         - Key: Name
           Value: MainVPC-route-public-b
+
+###### Definition de la table de routage privee ######
 
   PrivateRouteTableA:
     Type: AWS::EC2::RouteTable
@@ -149,6 +176,8 @@ Resources:
         - Key: Name
           Value: MainVPC-route-private-c
 
+###### Rattachement des tables de routage publique ######
+
   AttachPublicRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -160,6 +189,8 @@ Resources:
     Properties:
       RouteTableId: !Ref PublicRouteTableB
       SubnetId: !Ref PublicSubnetB
+
+###### Rattachement des tables de routage privee ######
 
   AttachPrivateRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -179,6 +210,8 @@ Resources:
       RouteTableId: !Ref PrivateRouteTableC
       SubnetId: !Ref PrivateSubnetC
 
+###### Routes Publiques ######
+
   PublicRouteA:
     Type: AWS::EC2::Route
     Properties:
@@ -195,6 +228,8 @@ Resources:
       RouteTableId: !Ref PublicRouteTableB
       MapIpPublicOnLaunch: True
 
+###### Routes Privees ######
+
   PrivateRouteA:
     Type: AWS::EC2::Route
     Properties:
@@ -209,45 +244,45 @@ Resources:
       GatewayId: !Ref NatGatewayB
       RouteTableId: !Ref PrivateRouteTableB
 
-  WebsiteEC2SecurityGroup:
-    Type:  AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Website EC2 Security Group
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      VpcId: !Ref VpcID
+  # WebsiteEC2SecurityGroup:
+  #   Type:  AWS::EC2::SecurityGroup
+  #   Properties:
+  #     GroupDescription: Website EC2 Security Group
+  #     SecurityGroupEgress:
+  #       - IpProtocol: -1
+  #         CidrIp: 0.0.0.0/0
+  #     SecurityGroupIngress:
+  #       - IpProtocol: tcp
+  #         FromPort: 80
+  #         ToPort: 80
+  #         CidrIp: 0.0.0.0/0
+  #     VpcId: !Ref VpcID
 
-  WebsiteLaunchConfig:
-    Type: AWS::AutoScaling::LaunchConfiguration
-    Properties:
-      AssociatePublicIpAdress: false
-      ImageId: ami-04e905a52ec8010b2
-      InstanceType: t2.micro
-      SecurityGroups:
-        -!Ref WebsiteEC2SecurityGroup
-      UserDate:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          sudo systemctl start httpd
+  # WebsiteLaunchConfig:
+  #   Type: AWS::AutoScaling::LaunchConfiguration
+  #   Properties:
+  #     AssociatePublicIpAdress: false
+  #     ImageId: ami-04e905a52ec8010b2
+  #     InstanceType: t2.micro
+  #     SecurityGroups:
+  #       -!Ref WebsiteEC2SecurityGroup
+  #     UserDate:
+  #       Fn::Base64: !Sub |
+  #         #!/bin/bash
+  #         sudo systemctl start httpd
 
-  WebsiteScalingGroup:
-    Type: AWS::AutoScaling::AutoScalingGroup
-    Properties:
-      LaunchConfigurationName: !Ref WebsiteLaunchConfig
-      AvailabilityZones:
-        - Fn::Select:
-          - 0
-          - Fn::GetAZs: !Ref AWS::Region
-        - Fn::Select:
-          - 1
-          - Fn::GetAZs: !Ref AWS::Region
-      VPCZoneIdentifier: !Ref PublicSubnets
-      DesiredCpacity: 1
-      MaxSize: 1
-      MiniSize: 1
+  # WebsiteScalingGroup:
+  #   Type: AWS::AutoScaling::AutoScalingGroup
+  #   Properties:
+  #     LaunchConfigurationName: !Ref WebsiteLaunchConfig
+  #     AvailabilityZones:
+  #       - Fn::Select:
+  #         - 0
+  #         - Fn::GetAZs: !Ref AWS::Region
+  #       - Fn::Select:
+  #         - 1
+  #         - Fn::GetAZs: !Ref AWS::Region
+  #     VPCZoneIdentifier: !Ref PublicSubnets
+  #     DesiredCpacity: 1
+  #     MaxSize: 1
+  #     MiniSize: 1
