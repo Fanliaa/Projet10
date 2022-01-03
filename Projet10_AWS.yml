@@ -272,8 +272,18 @@ Resources:
       Subnets:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
+  
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupeArn: !Ref TargetGroup
 
-  WebsiteTargetGroup:
+  TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
       Port: 80
@@ -299,7 +309,7 @@ Resources:
       MinSize: 2
       MaxSize: 4
       TargetGroupARNs:
-        - !Ref WebsiteTargetGroup
+        - !Ref TargetGroup
 
   WebsiteLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
