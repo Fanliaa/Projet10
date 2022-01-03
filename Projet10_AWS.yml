@@ -96,39 +96,39 @@ Resources:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
 
-########## Reservation d'une Elastic IP ##########
+# ########## Reservation d'une Elastic IP ##########
 
-  NatEipA:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+#   NatEipA:
+#     Type: AWS::EC2::EIP
+#     Properties:
+#       Domain: vpc
 
-  # NatEipB:
-  #   Type: AWS::EC2::EIP
-  #   Properties:
-  #     Domain: vpc
+#   # NatEipB:
+#   #   Type: AWS::EC2::EIP
+#   #   Properties:
+#   #     Domain: vpc
 
 ########## Creation des passerelles NAT ##########    
+# seulement sous réseau C
+  # NatGatewayA:
+  #   DependsOn: AttachInternetGateway
+  #   Type: AWS::EC2::NatGateway
+  #   Properties:
+  #     AllocationId: !GetAtt NatEipA.AllocationId
+  #     SubnetId: !Ref PublicSubnetA
+  #     # Tags:
+  #     #   - Key: Name
+  #     #     Value: "MainVPC-nat-a"
 
-  NatGatewayA:
-    DependsOn: AttachInternetGateway
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipA.AllocationId
-      SubnetId: !Ref PublicSubnetA
-      # Tags:
-      #   - Key: Name
-      #     Value: "MainVPC-nat-a"
-
-  NatGatewayB:
-    DependsOn: AttachInternetGateway
-    Type: AWS::EC2::NatGateway
-    Properties:
-      AllocationId: !GetAtt NatEipB.AllocationId
-      SubnetId: !Ref PublicSubnetB
-      # Tags:
-      #   - Key: Name
-      #     Value: "MainVPC-nat-b"
+  # NatGatewayB:
+  #   DependsOn: AttachInternetGateway
+  #   Type: AWS::EC2::NatGateway
+  #   Properties:
+  #     AllocationId: !GetAtt NatEipB.AllocationId
+  #     SubnetId: !Ref PublicSubnetB
+  #     # Tags:
+  #     #   - Key: Name
+  #     #     Value: "MainVPC-nat-b"
 
 ########## Definition de la table de routage ##########
 
@@ -305,7 +305,7 @@ Resources:
       VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
-      DesiredCapacity: 1
+      # DesiredCapacity: 1
       MinSize: 2
       MaxSize: 4
       TargetGroupARNs:
