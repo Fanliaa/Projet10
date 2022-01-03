@@ -7,15 +7,15 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
 
-###### Definition des parametres de notre infrastructure ######
+########## Definition des parametres de notre infrastructure ##########
 
 Parameters:
   VpcID:
     Type: String
-    Description: The target VPC identifier.
+    Description: Identifiant de mon VPC
 
 
-###### Definition des Ressources necessaires pour notre reseau ######
+########## Definition des Ressources necessaires pour notre reseau ##########
 
 Resources:
 
@@ -28,13 +28,13 @@ Resources:
         - Key: Name
           Value: "MonVPC"
 
-###### Creation de nos reseaux prives ######
+########## Creation de nos sous-reseaux prives et publics ##########
 
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-1a
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 8]]
       Tags:
         - Key: Name
           Value: "MainVPC-private-a"
@@ -44,7 +44,7 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-1b
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      CidrBlock: !Select [1, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 8]]
       Tags:
         - Key: Name
           Value: "MainVPC-private-b"
@@ -54,19 +54,17 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-1c
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      CidrBlock: !Select [2, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 8]]
       Tags:
         - Key: Name
           Value: "MainVPC-private-c"
       VpcId: !Ref MonVPC
 
-###### Creation de nos reseaux publics ######
-
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-1a
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      CidrBlock: !Select [3, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 8]]
       Tags:
         - Key: Name
           Value: "MainVPC-public-a"
@@ -76,13 +74,13 @@ Resources:
     Type: AWS::EC2::Subnet
     Properties:
       AvailabilityZone: eu-west-1b
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 1, 8]]
+      CidrBlock: !Select [4, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 8]]
       Tags:
         - Key: Name
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
 
-###### Definition de la passerelle internet ######
+########## Creation de la passerelle internet ##########
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -98,19 +96,19 @@ Resources:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
 
-###### Reservation d'une Elastic IP ######
+########## Reservation d'une Elastic IP ##########
 
   NatEipA:
     Type: AWS::EC2::EIP
     Properties:
       Domain: vpc
 
-  NatEipB:
-    Type: AWS::EC2::EIP
-    Properties:
-      Domain: vpc
+  # NatEipB:
+  #   Type: AWS::EC2::EIP
+  #   Properties:
+  #     Domain: vpc
 
-###### Creation des passerelles NAT ######      
+########## Creation des passerelles NAT ##########    
 
   NatGatewayA:
     DependsOn: AttachInternetGateway
@@ -125,15 +123,16 @@ Resources:
   NatGatewayB:
     DependsOn: AttachInternetGateway
     Type: AWS::EC2::NatGateway
-  Properties:
-    AllocationId: !GetAtt NatEipB.AllocationId
-    SubnetId: !Ref PublicSubnetB
+    Properties:
+      AllocationId: !GetAtt NatEipB.AllocationId
+      SubnetId: !Ref PublicSubnetB
       # Tags:
       #   - Key: Name
       #     Value: "MainVPC-nat-b"
 
-###### Definition de la table de routage publique ######
+########## Definition de la table de routage ##########
 
+# Table de routage pour le sous-reseau A
   PublicRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -141,76 +140,12 @@ Resources:
       Tags:
         - Key: Name
           Value: MainVPC-route-public-a
-
-  PublicRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MonVPC
-      Tags:
-        - Key: Name
-          Value: MainVPC-route-public-b
-
-###### Definition de la table de routage privee ######
-
-  PrivateRouteTableA:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MonVPC
-      Tags:
-        - Key: Name
-          Value: MainVPC-route-private-a
-
-  PrivateRouteTableB:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MonVPC
-      Tags:
-        - Key: Name
-          Value: MainVPC-route-private-b
-
-  PrivateRouteTableC:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MonVPC
-      Tags:
-        - Key: Name
-          Value: MainVPC-route-private-c
-
-###### Rattachement des tables de routage publique ######
-
+  
   AttachPublicRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
       RouteTableId: !Ref PublicRouteTableA
       SubnetId: !Ref PublicSubnetA
-
-  AttachPublicRouteTableB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PublicRouteTableB
-      SubnetId: !Ref PublicSubnetB
-
-###### Rattachement des tables de routage privee ######
-
-  AttachPrivateRouteTableA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableA
-      SubnetId: !Ref PrivateSubnetA
-
-  AttachPrivateRouteTableB:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableB
-      SubnetId: !Ref PrivateSubnetB
-
-  AttachPrivateRouteTableC:
-    Type: AWS::EC2::SubnetRouteTableAssociation
-    Properties:
-      RouteTableId: !Ref PrivateRouteTableC
-      SubnetId: !Ref PrivateSubnetC
-
-###### Routes Publiques ######
 
   PublicRouteA:
     Type: AWS::EC2::Route
@@ -220,6 +155,21 @@ Resources:
       RouteTableId: !Ref PublicRouteTableA
       MapIpPublicOnLaunch: True
 
+# Table de routage pour le sous-reseau B
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-b
+  
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref PublicSubnetB
+  
   PublicRouteB:
     Type: AWS::EC2::Route
     Properties:
@@ -228,7 +178,22 @@ Resources:
       RouteTableId: !Ref PublicRouteTableB
       MapIpPublicOnLaunch: True
 
-###### Routes Privees ######
+########## Definition de la table de routage privee ##########
+
+# Table de routage pour le sous-reseau prive A
+  PrivateRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-a
+  
+  AttachPrivateRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableA
+      SubnetId: !Ref PrivateSubnetA
 
   PrivateRouteA:
     Type: AWS::EC2::Route
@@ -237,6 +202,21 @@ Resources:
       GatewayId: !Ref NatGatewayA
       RouteTableId: !Ref PrivateRouteTableA
 
+# Table de routage pour le sous-reseau prive B
+  PrivateRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-b
+  
+  AttachPrivateRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableB
+      SubnetId: !Ref PrivateSubnetB
+
   PrivateRouteB:
     Type: AWS::EC2::Route
     Properties:
@@ -244,20 +224,47 @@ Resources:
       GatewayId: !Ref NatGatewayB
       RouteTableId: !Ref PrivateRouteTableB
 
-  # WebsiteEC2SecurityGroup:
-  #   Type:  AWS::EC2::SecurityGroup
-  #   Properties:
-  #     GroupDescription: Website EC2 Security Group
-  #     SecurityGroupEgress:
-  #       - IpProtocol: -1
-  #         CidrIp: 0.0.0.0/0
-  #     SecurityGroupIngress:
-  #       - IpProtocol: tcp
-  #         FromPort: 80
-  #         ToPort: 80
-  #         CidrIp: 0.0.0.0/0
-  #     VpcId: !Ref VpcID
+# Table de routage pour le sous-reseau prive C
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-private-c
 
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateSubnetC
+
+# Creation du groupe de securite
+  WebsiteEC2SecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref VpcID
+
+
+
+
+
+
+
+# Pour plus tard
   # WebsiteLaunchConfig:
   #   Type: AWS::AutoScaling::LaunchConfiguration
   #   Properties:
