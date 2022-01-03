@@ -239,7 +239,7 @@ Resources:
       RouteTableId: !Ref PrivateRouteTableC
       SubnetId: !Ref PrivateSubnetC
 
-# Creation du groupe de securite
+# Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
     Type:  AWS::EC2::SecurityGroup
     Properties:
@@ -259,37 +259,56 @@ Resources:
       VpcId: !Ref VpcID
 
 
+########## Mise en place de la partie publique de l'infrastructure ##########
 
+# Creation du repartiteur de charge
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref WebsiteEC2SecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
 
+  WebsiteTargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MonVPC
 
+# Creation de l'auto scaling group
+  WebsiteScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !RefWebSiteLaunchConfig
+      # AvailabilityZones:
+      #   - Fn::Select:
+      #     - 0
+      #     - Fn::GetAZs: !Ref AWS::Region
+      #   - Fn::Select:
+      #     - 1
+      #     - Fn::GetAZs: !Ref AWS::Region
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      DesiredCapacity: 1
+      MinSize: 2
+      MaxSize: 4
+      TargetGroupARNs:
+        - !Ref WebsiteTargetGroup
 
-
-# Pour plus tard
-  # WebsiteLaunchConfig:
-  #   Type: AWS::AutoScaling::LaunchConfiguration
-  #   Properties:
-  #     AssociatePublicIpAdress: false
-  #     ImageId: ami-04e905a52ec8010b2
-  #     InstanceType: t2.micro
-  #     SecurityGroups:
-  #       -!Ref WebsiteEC2SecurityGroup
-  #     UserDate:
-  #       Fn::Base64: !Sub |
-  #         #!/bin/bash
-  #         sudo systemctl start httpd
-
-  # WebsiteScalingGroup:
-  #   Type: AWS::AutoScaling::AutoScalingGroup
-  #   Properties:
-  #     LaunchConfigurationName: !Ref WebsiteLaunchConfig
-  #     AvailabilityZones:
-  #       - Fn::Select:
-  #         - 0
-  #         - Fn::GetAZs: !Ref AWS::Region
-  #       - Fn::Select:
-  #         - 1
-  #         - Fn::GetAZs: !Ref AWS::Region
-  #     VPCZoneIdentifier: !Ref PublicSubnets
-  #     DesiredCpacity: 1
-  #     MaxSize: 1
-  #     MiniSize: 1
+  WebsiteLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      AssociatePublicIpAddress: false
+      ImageId: ami-04e905a52ec8010b2
+      InstanceType: t2.micro
+      SecurityGroups:
+        - !Ref WebsiteEC2SecurityGroup
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
