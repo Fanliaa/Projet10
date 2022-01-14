@@ -1,32 +1,4 @@
-Skip to content
-Search or jump to…
-Pull requests
-Issues
-Marketplace
-Explore
- 
-@Fanliaa 
-Fanliaa
-/
-Projet10
-Private
-Code
-Issues
-Pull requests
-Actions
-Projects
-Security
-Insights
-Settings
-Projet10/Projet10_AWS.yml
-@Fanliaa
-Fanliaa Modifications à apporter pour sous réseau C
-Latest commit ed2b5dd 7 days ago
- History
- 1 contributor
-324 lines (279 sloc)  8.19 KB
-   
-#########################################################################
+   #########################################################################
 #                     Projet 10 OpenClassRooms - AWS                    #
 #########################################################################
 
@@ -335,4 +307,3 @@ Resources:
   StockageS3:
     Type: AWS::S3::Bucket
     Properties:
-      
