@@ -1,3 +1,31 @@
+Skip to content
+Search or jump to…
+Pull requests
+Issues
+Marketplace
+Explore
+ 
+@Fanliaa 
+Fanliaa
+/
+Projet10
+Private
+Code
+Issues
+Pull requests
+Actions
+Projects
+Security
+Insights
+Settings
+Projet10/Projet10_AWS.yml
+@Fanliaa
+Fanliaa Modifications à apporter pour sous réseau C
+Latest commit ed2b5dd 7 days ago
+ History
+ 1 contributor
+324 lines (279 sloc)  8.19 KB
+   
 #########################################################################
 #                     Projet 10 OpenClassRooms - AWS                    #
 #########################################################################
@@ -6,13 +34,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
-
-########## Definition des parametres de notre infrastructure ##########
-
-Parameters:
-  VpcID:
-    Type: String
-    Description: Identifiant de mon VPC
 
 
 ########## Definition des Ressources necessaires pour notre reseau ##########
@@ -27,6 +48,7 @@ Resources:
       Tags:
         - Key: Name
           Value: "MonVPC"
+
 
 ########## Creation de nos sous-reseaux prives et publics ##########
 
@@ -80,6 +102,7 @@ Resources:
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
 
+
 ########## Creation de la passerelle internet ##########
 
   InternetGateway:
@@ -96,20 +119,9 @@ Resources:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
 
-# ########## Reservation d'une Elastic IP ##########
-
-#   NatEipA:
-#     Type: AWS::EC2::EIP
-#     Properties:
-#       Domain: vpc
-
-#   # NatEipB:
-#   #   Type: AWS::EC2::EIP
-#   #   Properties:
-#   #     Domain: vpc
 
 ########## Creation des passerelles NAT ##########    
-# seulement sous réseau C
+# seulement sous reseau C
   # NatGatewayA:
   #   DependsOn: AttachInternetGateway
   #   Type: AWS::EC2::NatGateway
@@ -119,16 +131,6 @@ Resources:
   #     # Tags:
   #     #   - Key: Name
   #     #     Value: "MainVPC-nat-a"
-
-  # NatGatewayB:
-  #   DependsOn: AttachInternetGateway
-  #   Type: AWS::EC2::NatGateway
-  #   Properties:
-  #     AllocationId: !GetAtt NatEipB.AllocationId
-  #     SubnetId: !Ref PublicSubnetB
-  #     # Tags:
-  #     #   - Key: Name
-  #     #     Value: "MainVPC-nat-b"
 
 ########## Definition de la table de routage ##########
 
@@ -221,7 +223,7 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref NatGatewayB
+      GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PrivateRouteTableB
 
 # Table de routage pour le sous-reseau prive C
@@ -238,6 +240,14 @@ Resources:
     Properties:
       RouteTableId: !Ref PrivateRouteTableC
       SubnetId: !Ref PrivateSubnetC
+  
+    PrivateRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PrivateRouteTableC
+
 
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
@@ -248,15 +258,19 @@ Resources:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
       SecurityGroupIngress:
-        - IpProtocol: tcp
+        - Protocol: http
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
+        - Protocol: ssh
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-      VpcId: !Ref VpcID
+        - Protocol: domain
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
 
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
@@ -295,13 +309,6 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !RefWebSiteLaunchConfig
-      # AvailabilityZones:
-      #   - Fn::Select:
-      #     - 0
-      #     - Fn::GetAZs: !Ref AWS::Region
-      #   - Fn::Select:
-      #     - 1
-      #     - Fn::GetAZs: !Ref AWS::Region
       VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
@@ -311,14 +318,21 @@ Resources:
       TargetGroupARNs:
         - !Ref TargetGroup
 
-  WebsiteLaunchConfig:
+  WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
       AssociatePublicIpAddress: false
       ImageId: ami-04e905a52ec8010b2
       InstanceType: t2.micro
+      AssociatePublicIpAddress: true
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
+
+# Creation de l'espace de stockage S3 pour la configuration Wordpress
+  StockageS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      
