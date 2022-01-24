@@ -73,3 +73,12 @@ Resources:
         - Key: Name
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
+
+########## Creation de la passerelle internet ##########
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "MainVPC-InternetGateway"
