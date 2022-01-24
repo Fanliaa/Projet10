@@ -82,3 +82,10 @@ Resources:
       Tags:
         - Key: Name
           Value: "MainVPC-InternetGateway"
+
+# Rattachement de la passerelle internet
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      InternetGatewayId: !Ref InternetGateway
