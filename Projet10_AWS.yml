@@ -20,3 +20,15 @@ Resources:
       Tags:
         - Key: Name
           Value: "MonVPC"
+
+########## Creation de nos sous-reseaux prives et publics ##########
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-3a
+      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-a"
+      VpcId: !Ref MonVPC
