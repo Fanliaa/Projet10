@@ -53,3 +53,13 @@ Resources:
         - Key: Name
           Value: "MainVPC-private-c"
       VpcId: !Ref MonVPC
+        
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      AvailabilityZone: eu-west-3a
+      CidrBlock: !Select [3, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      Tags:
+        - Key: Name
+          Value: "MainVPC-public-a"
+      VpcId: !Ref MonVPC
