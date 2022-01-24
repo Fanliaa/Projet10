@@ -89,3 +89,14 @@ Resources:
     Properties:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
+
+########## Definition de la table de routage ##########
+
+# Table de routage pour le sous-reseau A
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-a
