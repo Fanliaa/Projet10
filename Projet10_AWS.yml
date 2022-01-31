@@ -122,3 +122,9 @@ Resources:
       Tags:
         - Key: Name
           Value: MainVPC-route-public-b
+    
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref PublicSubnetB
