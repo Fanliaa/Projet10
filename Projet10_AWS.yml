@@ -136,29 +136,6 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableB
 
-########## Definition de la table de routage privee ##########
-
-# # Table de routage pour le sous-reseau prive A
-#   PrivateRouteTableA:
-#     Type: AWS::EC2::RouteTable
-#     Properties:
-#       VpcId: !Ref MonVPC
-#       Tags:
-#         - Key: Name
-#           Value: MainVPC-route-private-a
-
-#   AttachPrivateRouteTableA:
-#     Type: AWS::EC2::SubnetRouteTableAssociation
-#     Properties:
-#       RouteTableId: !Ref PrivateRouteTableA
-#       SubnetId: !Ref PrivateSubnetA
-
-#   PrivateRouteA:
-#     Type: AWS::EC2::Route
-#     Properties:
-#       DestinationCidrBlock: 0.0.0.0/0
-#       RouteTableId: !Ref PrivateRouteTableA
-
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
     Type:  AWS::EC2::SecurityGroup
@@ -233,11 +210,12 @@ Resources:
       ImageId: ami-04e905a52ec8010b2
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
+      KeyName: Cle_P10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
       # Continuer script bash
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          apt-get update && upgrade -O
-          apt-get install docker -O
+          sudo apt update && upgrade -y
+          sudo apt install docker -y
