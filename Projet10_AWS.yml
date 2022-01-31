@@ -213,6 +213,19 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
+  WebsiteScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WordPressLaunchConfig
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      # DesiredCapacity: 1
+      MinSize: 2
+      MaxSize: 4
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
 # Creation de l'auto scaling group
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
@@ -227,4 +240,4 @@ Resources:
         Fn::Base64: !Sub |
           #!/bin/bash
           apt-get update && upgrade -O
-          apt-get install docker -O 
+          apt-get install docker -O
