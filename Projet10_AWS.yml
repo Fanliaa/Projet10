@@ -181,3 +181,13 @@ Resources:
           ToPort: 53
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
+
+########## Mise en place de la partie publique de l'infrastructure ##########
+
+# Creation du repartiteur de charge
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MonVPC
