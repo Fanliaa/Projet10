@@ -138,17 +138,46 @@ Resources:
 
 ########## Definition de la table de routage privee ##########
 
-# Table de routage pour le sous-reseau prive A
-  PrivateRouteTableA:
-    Type: AWS::EC2::RouteTable
-    Properties:
-      VpcId: !Ref MonVPC
-      Tags:
-        - Key: Name
-          Value: MainVPC-route-private-a
+# # Table de routage pour le sous-reseau prive A
+#   PrivateRouteTableA:
+#     Type: AWS::EC2::RouteTable
+#     Properties:
+#       VpcId: !Ref MonVPC
+#       Tags:
+#         - Key: Name
+#           Value: MainVPC-route-private-a
 
-  AttachPrivateRouteTableA:
-    Type: AWS::EC2::SubnetRouteTableAssociation
+#   AttachPrivateRouteTableA:
+#     Type: AWS::EC2::SubnetRouteTableAssociation
+#     Properties:
+#       RouteTableId: !Ref PrivateRouteTableA
+#       SubnetId: !Ref PrivateSubnetA
+
+#   PrivateRouteA:
+#     Type: AWS::EC2::Route
+#     Properties:
+#       DestinationCidrBlock: 0.0.0.0/0
+#       RouteTableId: !Ref PrivateRouteTableA
+
+# Creation du groupe de securite (firewall virtuel)
+  WebsiteEC2SecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
     Properties:
-      RouteTableId: !Ref PrivateRouteTableA
-      SubnetId: !Ref PrivateSubnetA
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
