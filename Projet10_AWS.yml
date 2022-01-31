@@ -212,3 +212,19 @@ Resources:
       DefaultActions:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
+
+# Creation de l'auto scaling group
+  WordPressLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-04e905a52ec8010b2
+      InstanceType: t2.micro
+      AssociatePublicIpAddress: true
+      SecurityGroups:
+        - !Ref WebsiteEC2SecurityGroup
+      # Continuer script bash
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          apt-get update && upgrade -O
+          apt-get install docker -O 
