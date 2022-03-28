@@ -7,6 +7,28 @@ AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
 
+########## Definition des parametres pour nos outils ##########
+
+Parameters:
+  DBName:
+    Default: WordpressDB
+    Description: Nom de la BDD Wordpress
+    Type: String
+
+  DBUser:
+    Default: wpuser
+    Description: Nom de l'utilisateur Wordpress
+    Type: String
+
+  DBPassword:
+    Default: BtssioWP13!
+    Description: Mon de passe de la BDD Wordpress
+    Type: String
+
+  DBClass:
+    Default: db.t2.micro
+    Description: Catégorie/Classe de notre instance RDS
+    Type: String
 
 ########## Definition des Ressources necessaires pour notre reseau ##########
 
@@ -43,7 +65,6 @@ Resources:
             Value: "MainVPC-private-b"
         VpcId: !Ref MonVPC
 
-          
   PrivateSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
@@ -73,17 +94,6 @@ Resources:
         - Key: Name
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
-
-########## Creation groupe sous-reseau RDS ##########
-
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Groupe de sous-reseau RDS
-      DBSubnetGroupName: RDSGroup
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
 
 ########## Creation de la passerelle internet ##########
 
@@ -169,37 +179,8 @@ Resources:
           ToPort: 53
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
-  
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: RDS Security Group
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
-      VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
-
-# Creation du RDS
-  MyDB:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      DBSecurityGroups:
-        - !Ref RDSSecurityGroup
-      AllocatedStorage: '5'
-      DBInstanceClass: db.t2.micro
-      Engine: MySQL
-      MasterUsername: wpuser
-      MasterUserPassword: WPbtssio11!
-      DBName: DBWordpress
-      DBSubnetGroupName: !Ref DBSubnetGroup
-    DeletionPolicy: Snapshot
 
 # Creation du repartiteur de charge
   TargetGroup:
@@ -267,3 +248,44 @@ Resources:
           sudo docker run -d -ti -p 80:80 --name WP10 Fanliaa/wordpress_P10:test -v /srv/wordpress:/var/www/html
           sudo docker exec WP10 wp core config --dbname=DBWordpress --dbuser=wpuser --dbpass=WPbtssio11! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
           sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
+
+########## Mise en place du service RDS ##########
+
+# Creation du groupe de securite
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
+# Creation groupe sous-reseau RDS
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupName: RDSGroup
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+# Creation du RDS
+  DBWordpress:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBName
+      Engine: mariadb
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: True
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      # VPCSecurityGroups:
+      # - !GetAtt RDSSecurityGroup.GroupId
+      DBSecurityGroups:
+        - !Ref RDSSecurityGroup
