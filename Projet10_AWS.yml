@@ -26,7 +26,7 @@ Resources:
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: eu-west-3a
+      AvailabilityZone: us-west-1a
       CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
         - Key: Name
@@ -36,7 +36,7 @@ Resources:
   PrivateSubnetB:
       Type: AWS::EC2::Subnet
       Properties:
-        AvailabilityZone: eu-west-3b
+        AvailabilityZone: us-west-1c
         CidrBlock: !Select [1, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
         Tags:
           - Key: Name
@@ -47,7 +47,7 @@ Resources:
   PrivateSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: eu-west-3c
+      AvailabilityZone: us-west-1c
       CidrBlock: !Select [2, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
         - Key: Name
@@ -57,7 +57,7 @@ Resources:
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: eu-west-3a
+      AvailabilityZone: us-west-1a
       CidrBlock: !Select [3, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
         - Key: Name
@@ -67,12 +67,23 @@ Resources:
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: eu-west-3b
+      AvailabilityZone: us-west-1c
       CidrBlock: !Select [4, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
         - Key: Name
           Value: "MainVPC-public-b"
       VpcId: !Ref MonVPC
+
+########## Creation groupe sous-reseau RDS ##########
+
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupName: RDSGroup
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
 
 ########## Creation de la passerelle internet ##########
 
@@ -158,8 +169,37 @@ Resources:
           ToPort: 53
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
+  
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
+
+# Creation du RDS
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      DBSecurityGroups:
+        - !Ref RDSSecurityGroup
+      AllocatedStorage: '5'
+      DBInstanceClass: db.t2.micro
+      Engine: MySQL
+      MasterUsername: wpuser
+      MasterUserPassword: WPbtssio11!
+      DBName: DBWordpress
+      DBSubnetGroupName: !Ref DBSubnetGroup
+    DeletionPolicy: Snapshot
 
 # Creation du repartiteur de charge
   TargetGroup:
@@ -197,7 +237,6 @@ Resources:
       VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
-      # DesiredCapacity: 1
       MinSize: 2
       MaxSize: 4
       TargetGroupARNs:
@@ -217,5 +256,14 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          sudo apt update && upgrade -y
-          sudo apt install docker -y
+          sudo apt update -y
+          sudo apt upgrade -y
+          sudo apt-get install ca-certificates curl gnupg lsb-release
+          curl -fsSL https://download.docker.com/linux/debian/gpg | sudo gpg --dearmor -o /usr/share/keyrings/docker-archive-keyring.gp
+          sudo echo "deb [arch=$(dpkg --print-architecture) signed-by=/usr/share/keyrings/docker-archive-keyring.gpg] https://download.docker.com/linux/debian $(lsb_release -cs) stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+          sudo apt-get update -y
+          sudo apt-get install docker-ce docker-ce-cli containerd.io
+          sudo mkdir /srv/wordpress
+          sudo docker run -d -ti -p 80:80 --name WP10 Fanliaa/wordpress_P10:test -v /srv/wordpress:/var/www/html
+          sudo docker exec WP10 wp core config --dbname=DBWordpress --dbuser=wpuser --dbpass=WPbtssio11! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+          sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
