@@ -48,6 +48,7 @@ Resources:
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
+      # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
       CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
@@ -58,6 +59,7 @@ Resources:
   PrivateSubnetB:
       Type: AWS::EC2::Subnet
       Properties:
+        # AvailabilityZone: eu-west-3b
         AvailabilityZone: us-west-1c
         CidrBlock: !Select [1, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
         Tags:
@@ -68,7 +70,8 @@ Resources:
   PrivateSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
-      AvailabilityZone: us-west-1c
+      # AvailabilityZone: eu-west-3c
+      AvailabilityZone: us-west-1a
       CidrBlock: !Select [2, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
         - Key: Name
@@ -78,6 +81,7 @@ Resources:
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
+      # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
       CidrBlock: !Select [3, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
@@ -88,6 +92,7 @@ Resources:
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
+      # AvailabilityZone: eu-west-3b
       AvailabilityZone: us-west-1c
       CidrBlock: !Select [4, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
       Tags:
@@ -274,7 +279,7 @@ Resources:
         - !Ref PrivateSubnetB
 
 # Creation du RDS
-  DBWordpress:
+  MyDB:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: '5'
@@ -285,7 +290,5 @@ Resources:
       MasterUserPassword: !Ref DBPassword
       MultiAZ: True
       DBSubnetGroupName: !Ref DBSubnetGroup
-      # VPCSecurityGroups:
-      # - !GetAtt RDSSecurityGroup.GroupId
-      DBSecurityGroups:
-        - !Ref RDSSecurityGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
