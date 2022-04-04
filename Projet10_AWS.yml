@@ -232,10 +232,10 @@ Resources:
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-04e905a52ec8010b2
+      ImageId: ami-059861fd104fd7f27
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
-      KeyName: Cle_P10
+      KeyName: Cle_USP10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
       # Continuer script bash
@@ -292,3 +292,4 @@ Resources:
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
         - !GetAtt RDSSecurityGroup.GroupId
+      
