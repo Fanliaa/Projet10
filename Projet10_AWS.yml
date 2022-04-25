@@ -252,7 +252,7 @@ Resources:
 
 ########## Mise en place du service RDS ##########
 
-# Creation du groupe de securite
+# Creation du groupe de securite RDS
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -290,3 +290,56 @@ Resources:
         - !GetAtt RDSSecurityGroup.GroupId
 
 ########## Mise en place de l'EFS pour Wordpress ##########
+
+# Creation du groupe de securite EFS
+  SecurityGroupEFS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 111
+          ToPort: 111
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
+# Creation du EFS
+  StockageEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: false
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+        - Key: Name
+          Value: NomTest
+
+  # Creation des cibles de montage pour chaque Subnet
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: 
+        Ref: "StockageEFS"
+      SubnetId: 
+        Ref: "PrivateSubnetA"
+      SecurityGroups: 
+        - Ref: "SecurityGroupEFS"
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: 
+        Ref: "StockageEFS"
+      SubnetId: 
+        Ref: "PrivateSubnetB"
+      SecurityGroups: 
+        - Ref: "SecurityGroupEFS"
+
+# sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFSFileSystem}.efs.us-east-1.amazonaws.com:/ /srv/wordpress
+
+#vérifier si wp déjà installé (si wp-config est déjà créé.)
