@@ -245,10 +245,16 @@ Resources:
           sudo apt update -y
           sudo apt upgrade -y
           sudo apt install docker docker-compose -y
+          sudo apt install nfs-common -y -f
           sudo mkdir /srv/wordpress
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport {StockageEFS}.efs.us-west-1.amazonaws.com:/ /srv/wordpress
           sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test 
-          sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
-          sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
+          if [ ! -d "/srv/wordpress/wp-config.php" ];then
+            sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
+          else
+            echo "Le fichier wp-config existe déjà."
+          fi
 
 ########## Mise en place du service RDS ##########
 
@@ -323,23 +329,24 @@ Resources:
   MountTargetA:
     Type: AWS::EFS::MountTarget
     Properties: 
-      FileSystemId: 
-        Ref: "StockageEFS"
-      SubnetId: 
-        Ref: "PrivateSubnetA"
+      FileSystemId: !Ref StockageEFS
+      SubnetId: !Ref PublicSubnetA
       SecurityGroups: 
-        - Ref: "SecurityGroupEFS"
+        - !Ref SecurityGroupEFS
 
   MountTargetB:
     Type: AWS::EFS::MountTarget
     Properties: 
-      FileSystemId: 
-        Ref: "StockageEFS"
-      SubnetId: 
-        Ref: "PrivateSubnetB"
+      FileSystemId: !Ref StockageEFS
+      SubnetId: !Ref PublicSubnetB
       SecurityGroups: 
-        - Ref: "SecurityGroupEFS"
+        - !Ref SecurityGroupEFS
 
-# sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${EFSFileSystem}.efs.us-east-1.amazonaws.com:/ /srv/wordpress
+########## Mise en place du Bucket S3 pour les images Wordpress ##########
+  # BucketS3:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: Bucket_P10
+  #     DeletionPolicy: Retain
 
-#vérifier si wp déjà installé (si wp-config est déjà créé.)
+# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@54.176.103.77
