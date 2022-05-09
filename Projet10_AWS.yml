@@ -313,18 +313,6 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
-# Creation du EFS
-  StockageEFS:
-    Type: AWS::EFS::FileSystem
-    Properties:
-      BackupPolicy:
-        Status: DISABLED
-      Encrypted: false
-      PerformanceMode: generalPurpose
-      FileSystemTags:
-        - Key: Name
-          Value: NomTest
-
   # Creation des cibles de montage pour chaque Subnet
   MountTargetA:
     Type: AWS::EFS::MountTarget
@@ -342,11 +330,34 @@ Resources:
       SecurityGroups: 
         - !Ref SecurityGroupEFS
 
-########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  # BucketS3:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: Bucket_P10
-  #     DeletionPolicy: Retain
+  # Creation du EFS
+  StockageEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: false
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+        - Key: Name
+          Value: NomTest
 
-# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@54.176.103.77
+  # Creation du point d'acces
+  PointAccesEFS:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref StockageEFS
+
+########## Mise en place du Bucket S3 pour les images Wordpress ##########
+  BucketS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bucket-projet-aws
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
+
+# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@204.236.143.124
