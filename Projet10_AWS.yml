@@ -38,7 +38,7 @@ Resources:
   MonVPC:
     Type: "AWS::EC2::VPC"
     Properties:
-      CidrBlock: 172.18.1.0/24
+      CidrBlock: 10.0.0.0/16
       Tags:
         - Key: Name
           Value: "MonVPC"
@@ -50,7 +50,7 @@ Resources:
     Properties:
       # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
-      CidrBlock: !Select [0, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      CidrBlock: 10.0.101.0/24
       Tags:
         - Key: Name
           Value: "MainVPC-private-a"
@@ -61,7 +61,7 @@ Resources:
       Properties:
         # AvailabilityZone: eu-west-3b
         AvailabilityZone: us-west-1c
-        CidrBlock: !Select [1, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+        CidrBlock: 10.0.102.0/24
         Tags:
           - Key: Name
             Value: "MainVPC-private-b"
@@ -72,7 +72,7 @@ Resources:
     Properties:
       # AvailabilityZone: eu-west-3c
       AvailabilityZone: us-west-1a
-      CidrBlock: !Select [2, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      CidrBlock: 10.0.103.0/24
       Tags:
         - Key: Name
           Value: "MainVPC-private-c"
@@ -83,7 +83,7 @@ Resources:
     Properties:
       # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
-      CidrBlock: !Select [3, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      CidrBlock: 10.0.1.0/24
       Tags:
         - Key: Name
           Value: "MainVPC-public-a"
@@ -94,7 +94,7 @@ Resources:
     Properties:
       # AvailabilityZone: eu-west-3b
       AvailabilityZone: us-west-1c
-      CidrBlock: !Select [4, !Cidr [!GetAtt MonVPC.CidrBlock, 5, 5]]
+      CidrBlock: 10.0.2.0/24
       Tags:
         - Key: Name
           Value: "MainVPC-public-b"
@@ -245,9 +245,9 @@ Resources:
           sudo apt update -y
           sudo apt upgrade -y
           sudo apt install docker docker-compose -y
-          sudo apt install nfs-common -y -f
+          sudo apt install nfs-utils nfs-common -y -f
           sudo mkdir /srv/wordpress
-          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport {StockageEFS}.efs.us-west-1.amazonaws.com:/ /srv/wordpress
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-071735af73bb37734.efs.us-west-1.amazonaws.com:/ /srv/wordpress
           sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test 
           if [ ! -d "/srv/wordpress/wp-config.php" ];then
             sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
@@ -343,21 +343,22 @@ Resources:
           Value: NomTest
 
   # Creation du point d'acces
-  PointAccesEFS:
-    Type: AWS::EFS::AccessPoint
-    Properties:
-      FileSystemId: !Ref StockageEFS
+  # PointAccesEFS:
+  #   Type: AWS::EFS::AccessPoint
+  #   Properties:
+  #     FileSystemId: !Ref StockageEFS
+  #     FileSystemName: AccesEFS
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  BucketS3:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: bucket-projet-aws
-      AccessControl: Private
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
+  # BucketS3:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: bucket-projet-aws
+  #     AccessControl: Private
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: True
+  #       BlockPublicPolicy: True
+  #       IgnorePublicAcls: True
+  #       RestrictPublicBuckets: True
 
-# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@204.236.143.124
+# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@3.101.132.110
