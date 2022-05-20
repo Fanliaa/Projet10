@@ -351,15 +351,15 @@ Resources:
         Path: /srv/wordpress
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  # BucketS3:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: bucket-projet-aws
-  #     AccessControl: Private
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: True
-  #       BlockPublicPolicy: True
-  #       IgnorePublicAcls: True
-  #       RestrictPublicBuckets: True
+  BucketS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bucket-projet-aws
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
 
 # ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@3.101.132.110
