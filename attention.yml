@@ -1,0 +1,365 @@
+#########################################################################
+#                     Projet 10 OpenClassRooms - AWS                    #
+#########################################################################
+
+# Initialisation du template
+AWSTemplateFormatVersion: 2010-09-09
+Description: >-
+  AWS CloudFormation VPC + Infrastructure Template P10
+
+########## Definition des parametres pour nos outils ##########
+
+Parameters:
+  DBName:
+    Default: WordpressDB
+    Description: Nom de la BDD Wordpress
+    Type: String
+
+  DBUser:
+    Default: wpuser
+    Description: Nom de l'utilisateur Wordpress
+    Type: String
+
+  DBPassword:
+    Default: BtssioWP13!
+    Description: Mon de passe de la BDD Wordpress
+    Type: String
+
+  DBClass:
+    Default: db.t2.micro
+    Description: Catégorie/Classe de notre instance RDS
+    Type: String
+
+########## Definition des Ressources necessaires pour notre reseau ##########
+
+Resources:
+
+# Creation de notre VPC
+  MonVPC:
+    Type: "AWS::EC2::VPC"
+    Properties:
+      CidrBlock: 10.0.0.0/16
+      Tags:
+        - Key: Name
+          Value: "MonVPC"
+
+########## Creation de nos sous-reseaux prives et publics ##########
+
+  PrivateSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # AvailabilityZone: eu-west-3a
+      AvailabilityZone: us-west-1a
+      CidrBlock: 10.0.101.0/24
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-a"
+      VpcId: !Ref MonVPC
+      
+  PrivateSubnetB:
+      Type: AWS::EC2::Subnet
+      Properties:
+        # AvailabilityZone: eu-west-3b
+        AvailabilityZone: us-west-1c
+        CidrBlock: 10.0.102.0/24
+        Tags:
+          - Key: Name
+            Value: "MainVPC-private-b"
+        VpcId: !Ref MonVPC
+
+  PrivateSubnetC:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # AvailabilityZone: eu-west-3c
+      AvailabilityZone: us-west-1a
+      CidrBlock: 10.0.103.0/24
+      Tags:
+        - Key: Name
+          Value: "MainVPC-private-c"
+      VpcId: !Ref MonVPC
+        
+  PublicSubnetA:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # AvailabilityZone: eu-west-3a
+      AvailabilityZone: us-west-1a
+      CidrBlock: 10.0.1.0/24
+      Tags:
+        - Key: Name
+          Value: "MainVPC-public-a"
+      VpcId: !Ref MonVPC
+      
+  PublicSubnetB:
+    Type: AWS::EC2::Subnet
+    Properties:
+      # AvailabilityZone: eu-west-3b
+      AvailabilityZone: us-west-1c
+      CidrBlock: 10.0.2.0/24
+      Tags:
+        - Key: Name
+          Value: "MainVPC-public-b"
+      VpcId: !Ref MonVPC
+
+########## Creation de la passerelle internet ##########
+
+  InternetGateway:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: "MainVPC-InternetGateway"
+
+# Rattachement de la passerelle internet
+  AttachInternetGateway:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      InternetGatewayId: !Ref InternetGateway
+
+########## Definition de la table de routage ##########
+
+# Table de routage pour le sous-reseau A
+  PublicRouteTableA:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-a
+  
+  AttachPublicRouteTableA:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableA
+      SubnetId: !Ref PublicSubnetA
+
+  PublicRouteA:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableA
+
+# Table de routage pour le sous-reseau B
+  PublicRouteTableB:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MainVPC-route-public-b
+    
+  AttachPublicRouteTableB:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PublicRouteTableB
+      SubnetId: !Ref PublicSubnetB
+
+  PublicRouteB:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref InternetGateway
+      RouteTableId: !Ref PublicRouteTableB
+
+# Creation du groupe de securite (firewall virtuel)
+  WebsiteEC2SecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
+########## Mise en place de la partie publique de l'infrastructure ##########
+
+# Creation du repartiteur de charge
+  TargetGroup:
+    Type: AWS::ElasticLoadBalancingV2::TargetGroup
+    Properties:
+      Port: 80
+      Protocol: HTTP
+      VpcId: !Ref MonVPC
+
+  LoadBalancer:
+    Type: AWS::ElasticLoadBalancingV2::LoadBalancer
+    Properties:
+      Type: application
+      Scheme: internet-facing
+      SecurityGroups:
+        - !Ref WebsiteEC2SecurityGroup
+      Subnets:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+  
+  LoadBalancerListener:
+    Type: AWS::ElasticLoadBalancingV2::Listener
+    Properties:
+      LoadBalancerArn: !Ref LoadBalancer
+      Port: 80
+      Protocol: HTTP
+      DefaultActions:
+        - Type: forward
+          TargetGroupArn: !Ref TargetGroup
+
+  WebsiteScalingGroup:
+    Type: AWS::AutoScaling::AutoScalingGroup
+    Properties:
+      LaunchConfigurationName: !Ref WordPressLaunchConfig
+      VPCZoneIdentifier:
+        - !Ref PublicSubnetA
+        - !Ref PublicSubnetB
+      MinSize: 2
+      MaxSize: 4
+      TargetGroupARNs:
+        - !Ref TargetGroup
+
+# Creation de l'auto scaling group
+  WordPressLaunchConfig:
+    Type: AWS::AutoScaling::LaunchConfiguration
+    Properties:
+      ImageId: ami-059861fd104fd7f27
+      InstanceType: t2.micro
+      AssociatePublicIpAddress: true
+      KeyName: Cle_USP10
+      SecurityGroups:
+        - !Ref WebsiteEC2SecurityGroup
+      # Continuer script bash
+      UserData:
+        Fn::Base64: !Sub |
+          #!/bin/bash
+          sudo apt update -y
+          sudo apt upgrade -y
+          sudo apt install docker docker-compose -y
+          sudo apt install nfs-utils nfs-common -y -f
+          sudo mkdir /srv/wordpress
+          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport ${StockageEFS}.efs.us-west-1.amazonaws.com:/ /srv/wordpress
+          sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test 
+          if [ ! -d "/srv/wordpress/wp-config.php" ];then
+            sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
+          else
+            echo "Le fichier wp-config existe déjà."
+          fi
+
+########## Mise en place du service RDS ##########
+
+# Creation du groupe de securite RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
+# Creation groupe sous-reseau RDS
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupName: RDSGroup
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
+
+# Creation du RDS
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBName
+      Engine: mariadb
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: True
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
+
+########## Mise en place de l'EFS pour Wordpress ##########
+
+# Creation du groupe de securite EFS
+  SecurityGroupEFS:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: EFS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 111
+          ToPort: 111
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
+  # Creation des cibles de montage pour chaque Subnet
+  MountTargetA:
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: !Ref StockageEFS
+      SubnetId: !Ref PublicSubnetA
+      SecurityGroups: 
+        - !Ref SecurityGroupEFS
+
+  MountTargetB:
+    Type: AWS::EFS::MountTarget
+    Properties: 
+      FileSystemId: !Ref StockageEFS
+      SubnetId: !Ref PublicSubnetB
+      SecurityGroups: 
+        - !Ref SecurityGroupEFS
+
+  # Creation du EFS
+  StockageEFS:
+    Type: AWS::EFS::FileSystem
+    Properties:
+      BackupPolicy:
+        Status: DISABLED
+      Encrypted: false
+      PerformanceMode: generalPurpose
+      FileSystemTags:
+        - Key: Name
+          Value: NomTest
+
+  # Creation du point d'acces EFS
+  PointAccesEFS:
+    Type: AWS::EFS::AccessPoint
+    Properties:
+      FileSystemId: !Ref StockageEFS
+      RootDirectory:
+        Path: /srv/wordpress
+
+########## Mise en place du Bucket S3 pour les images Wordpress ##########
+  # BucketS3:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: bucket-projet-aws
+  #     AccessControl: Private
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: True
+  #       BlockPublicPolicy: True
+  #       IgnorePublicAcls: True
+  #       RestrictPublicBuckets: True
+
+# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@3.101.132.110
