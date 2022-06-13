@@ -6,7 +6,6 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
-
 ########## Definition des parametres pour nos outils ##########
 
 Parameters:
@@ -30,6 +29,21 @@ Parameters:
     Description: Catégorie/Classe de notre instance RDS
     Type: String
 
+  IDWP:
+    Default: fj
+    Description: Nom compte admin Wordpress
+    Type: String
+
+  PasswordWP:
+    Default: Toto66!
+    Description: Mot de passe Admin wordpress
+    Type: String
+  
+  MailWP:
+    Default: toto@toto.com
+    Description: Mail Wordpress
+    Type: String
+
 ########## Definition des Ressources necessaires pour notre reseau ##########
 
 Resources:
@@ -38,6 +52,8 @@ Resources:
   MonVPC:
     Type: "AWS::EC2::VPC"
     Properties:
+      EnableDnsHostnames: true
+      EnableDnsSupport: true
       CidrBlock: 10.0.0.0/16
       Tags:
         - Key: Name
@@ -232,7 +248,7 @@ Resources:
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-059861fd104fd7f27
+      ImageId: ami-02541b8af977f6cdd
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
       KeyName: Cle_USP10
@@ -242,19 +258,27 @@ Resources:
       UserData:
         Fn::Base64: !Sub |
           #!/bin/bash
-          sudo apt update -y
-          sudo apt upgrade -y
-          sudo apt install docker docker-compose -y
-          sudo apt install nfs-utils nfs-common -y -f
+          sudo yum update -y
+          sudo yum upgrade -y
           sudo mkdir /srv/wordpress
-          sudo mount -t nfs4 -o nfsvers=4.1,rsize=1048576,wsize=1048576,hard,timeo=600,retrans=2,noresvport fs-071735af73bb37734.efs.us-west-1.amazonaws.com:/ /srv/wordpress
-          sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test 
+          sudo yum install amazon-efs-utils -y
+          sudo amazon-linux-extras install docker
+          sudo service docker start
+          sudo usermod -a -G docker ec2-user
+          sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+          sudo chmod +x /usr/local/bin/docker-compose
+          sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
+          sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
           if [ ! -d "/srv/wordpress/wp-config.php" ];then
-            sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
-            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=fj --admin_password=Toto66! --admin_email=toto@toto.com --allow-root
+            sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
           else
             echo "Le fichier wp-config existe déjà."
           fi
+    DependsOn:
+      - "MonVPC"
+      - "MountTargetA"
+      - "MountTargetB"
 
 ########## Mise en place du service RDS ##########
 
@@ -311,6 +335,10 @@ Resources:
           FromPort: 111
           ToPort: 111
           CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
   # Creation des cibles de montage pour chaque Subnet
@@ -342,23 +370,14 @@ Resources:
         - Key: Name
           Value: NomTest
 
-  # Creation du point d'acces
-  # PointAccesEFS:
-  #   Type: AWS::EFS::AccessPoint
-  #   Properties:
-  #     FileSystemId: !Ref StockageEFS
-  #     FileSystemName: AccesEFS
-
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  # BucketS3:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: bucket-projet-aws
-  #     AccessControl: Private
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: True
-  #       BlockPublicPolicy: True
-  #       IgnorePublicAcls: True
-  #       RestrictPublicBuckets: True
-
-# ssh -i "~/Documents/OpenClassrooms_docs/Projet10/Cle_USP10.pem" admin@3.101.132.110
+  BucketS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bucket-projet-aws
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
