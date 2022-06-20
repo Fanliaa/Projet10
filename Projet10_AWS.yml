@@ -43,6 +43,11 @@ Parameters:
     Default: toto@toto.com
     Description: Mail Wordpress
     Type: String
+  
+  MailAlarm:
+    Default: la-poubelle00@hotmail.com
+    Description: Mail pour les alertes EC2
+    Type: String
 
 ########## Definition des Ressources necessaires pour notre reseau ##########
 
@@ -269,12 +274,7 @@ Resources:
           sudo chmod +x /usr/local/bin/docker-compose
           sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
           sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
-          if [ ! -d "/srv/wordpress/wp-config.php" ];then
-            sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
-            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
-          else
-            echo "Le fichier wp-config existe déjà."
-          fi
+
     DependsOn:
       - "MonVPC"
       - "MountTargetA"
@@ -283,41 +283,41 @@ Resources:
 ########## Mise en place du service RDS ##########
 
 # Creation du groupe de securite RDS
-  RDSSecurityGroup:
-    Type: AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: RDS Security Group
-      SecurityGroupIngress:
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 0.0.0.0/0
-      VpcId: !Ref MonVPC
+#   RDSSecurityGroup:
+#     Type: AWS::EC2::SecurityGroup
+#     Properties:
+#       GroupDescription: RDS Security Group
+#       SecurityGroupIngress:
+#         - IpProtocol: tcp
+#           FromPort: 3306
+#           ToPort: 3306
+#           CidrIp: 0.0.0.0/0
+#       VpcId: !Ref MonVPC
 
-# Creation groupe sous-reseau RDS
-  DBSubnetGroup:
-    Type: AWS::RDS::DBSubnetGroup
-    Properties:
-      DBSubnetGroupDescription: Groupe de sous-reseau RDS
-      DBSubnetGroupName: RDSGroup
-      SubnetIds:
-        - !Ref PrivateSubnetA
-        - !Ref PrivateSubnetB
+# # Creation groupe sous-reseau RDS
+#   DBSubnetGroup:
+#     Type: AWS::RDS::DBSubnetGroup
+#     Properties:
+#       DBSubnetGroupDescription: Groupe de sous-reseau RDS
+#       DBSubnetGroupName: RDSGroup
+#       SubnetIds:
+#         - !Ref PrivateSubnetA
+#         - !Ref PrivateSubnetB
 
-# Creation du RDS
-  MyDB:
-    Type: AWS::RDS::DBInstance
-    Properties:
-      AllocatedStorage: '5'
-      DBInstanceClass: !Ref DBClass
-      DBName: !Ref DBName
-      Engine: mariadb
-      MasterUsername: !Ref DBUser
-      MasterUserPassword: !Ref DBPassword
-      MultiAZ: True
-      DBSubnetGroupName: !Ref DBSubnetGroup
-      VPCSecurityGroups:
-        - !GetAtt RDSSecurityGroup.GroupId
+# # Creation du RDS
+#   MyDB:
+#     Type: AWS::RDS::DBInstance
+#     Properties:
+#       AllocatedStorage: '5'
+#       DBInstanceClass: !Ref DBClass
+#       DBName: !Ref DBName
+#       Engine: mariadb
+#       MasterUsername: !Ref DBUser
+#       MasterUserPassword: !Ref DBPassword
+#       MultiAZ: True
+#       DBSubnetGroupName: !Ref DBSubnetGroup
+#       VPCSecurityGroups:
+#         - !GetAtt RDSSecurityGroup.GroupId
 
 ########## Mise en place de l'EFS pour Wordpress ##########
 
@@ -371,16 +371,16 @@ Resources:
           Value: NomTest
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  BucketS3:
-    Type: AWS::S3::Bucket
-    Properties:
-      BucketName: bucket-projet-aws
-      AccessControl: Private
-      PublicAccessBlockConfiguration:
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
+  # BucketS3:
+  #   Type: AWS::S3::Bucket
+  #   Properties:
+  #     BucketName: bucket-projet-aws
+  #     AccessControl: Private
+  #     PublicAccessBlockConfiguration:
+  #       BlockPublicAcls: True
+  #       BlockPublicPolicy: True
+  #       IgnorePublicAcls: True
+  #       RestrictPublicBuckets: True
 
 ########## Mise en place des alerte et parametres de surveillance ##########
 
@@ -392,6 +392,7 @@ Resources:
       PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: '1'
+      Cooldown: 120
 
   DiminutionCharge:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -400,36 +401,49 @@ Resources:
       PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: '-1'
+      Cooldown: 120
   
 # Ajout adresse mail d'alerte
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties: 
       Subscription:
-        - Endpoint:
-            Fn::GetOptionSetting:
-              OptionName: AlarmEmail
-              DefaultValue: ${MailAlerte}
+        - Endpoint: !Ref MailAlarm
           Protocol: email
 
 # Parametrage des parametres de l alarme CPU
-  AlarmCPU:
+  AlarmCPUHight:
     Type: AWS::CloudWatch::Alarm
     Properties:
       AlarmDescription: CPU alarme instances EC2
-      OKActions:
-        - !Ref AlarmTopic
-        - !Ref DiminutionCharge
       AlarmActions:
         - !Ref AlarmTopic
         - !Ref AugmentationCharge
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: '60'
-      EvaluationPeriods: '2'
-      Threshold: '85'
+      Period: 10
+      EvaluationPeriods: 1
+      Threshold: 80
       ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: AutoscalingGroup
+        Value: !Ref WebsiteScalingGroup
+
+  AlarmCPULow:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CPU alarme instances EC2
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref DiminutionCharge
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: 10
+      EvaluationPeriods: 1
+      Threshold: 50
+      ComparisonOperator: LessThanThreshold
       Dimensions:
       - Name: AutoscalingGroup
         Value: !Ref WebsiteScalingGroup
