@@ -381,3 +381,55 @@ Resources:
         BlockPublicPolicy: True
         IgnorePublicAcls: True
         RestrictPublicBuckets: True
+
+########## Mise en place des alerte et parametres de surveillance ##########
+
+# Ajout et suppresion d instance EC2 si charge importante ou non
+  AugmentationCharge:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      AutoScalingGroupName: !Ref WebsiteScalingGroup
+      ScalingAdjustment: '1'
+
+  DiminutionCharge:
+    Type: AWS::AutoScaling::ScalingPolicy
+    Properties:
+      AdjustmentType: ChangeInCapacity
+      PolicyType: SimpleScaling
+      AutoScalingGroupName: !Ref WebsiteScalingGroup
+      ScalingAdjustment: '-1'
+  
+# Ajout adresse mail d'alerte
+  AlarmTopic:
+    Type: AWS::SNS::Topic
+    Properties: 
+      Subscription:
+        - Endpoint:
+            Fn::GetOptionSetting:
+              OptionName: AlarmEmail
+              DefaultValue: ${MailAlerte}
+          Protocol: email
+
+# Parametrage des parametres de l alarme CPU
+  AlarmCPU:
+  Type: AWS::CloudWatch::Alarm
+  Properties:
+    AlarmDescription: CPU alarme instances EC2
+    OKActions:
+      - !Ref AlarmTopic
+      - !Ref DiminutionCharge
+    AlarmActions:
+      - !Ref AlarmTopic
+      - !Ref AugmentationCharge
+    MetricName: CPUUtilization
+    Namespace: AWS/EC2
+    Statistic: Average
+    Period: '60'
+    EvaluationPeriods: '2'
+    Threshold: '85'
+    ComparisonOperator: GreaterThanThreshold
+    Dimensions:
+    - Name: AutoscalingGroup
+      Value: !Ref WebsiteScalingGroup
