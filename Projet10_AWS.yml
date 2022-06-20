@@ -414,22 +414,22 @@ Resources:
 
 # Parametrage des parametres de l alarme CPU
   AlarmCPU:
-  Type: AWS::CloudWatch::Alarm
-  Properties:
-    AlarmDescription: CPU alarme instances EC2
-    OKActions:
-      - !Ref AlarmTopic
-      - !Ref DiminutionCharge
-    AlarmActions:
-      - !Ref AlarmTopic
-      - !Ref AugmentationCharge
-    MetricName: CPUUtilization
-    Namespace: AWS/EC2
-    Statistic: Average
-    Period: '60'
-    EvaluationPeriods: '2'
-    Threshold: '85'
-    ComparisonOperator: GreaterThanThreshold
-    Dimensions:
-    - Name: AutoscalingGroup
-      Value: !Ref WebsiteScalingGroup
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: CPU alarme instances EC2
+      OKActions:
+        - !Ref AlarmTopic
+        - !Ref DiminutionCharge
+      AlarmActions:
+        - !Ref AlarmTopic
+        - !Ref AugmentationCharge
+      MetricName: CPUUtilization
+      Namespace: AWS/EC2
+      Statistic: Average
+      Period: '60'
+      EvaluationPeriods: '2'
+      Threshold: '85'
+      ComparisonOperator: GreaterThanThreshold
+      Dimensions:
+      - Name: AutoscalingGroup
+        Value: !Ref WebsiteScalingGroup
