@@ -241,13 +241,22 @@ Resources:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
       LaunchConfigurationName: !Ref WordPressLaunchConfig
+      AutoScalingGroupName: AutoscalingWordPress
       VPCZoneIdentifier:
         - !Ref PublicSubnetA
         - !Ref PublicSubnetB
+      DesiredCapacity: 2
       MinSize: 2
       MaxSize: 4
       TargetGroupARNs:
         - !Ref TargetGroup
+      NotificationConfigurations:
+        - TopicARN: !Ref AlarmTopic
+          NotificationTypes:
+          - autoscaling:EC2_INSTANCE_LAUNCH
+          - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+          - autoscaling:EC2_INSTANCE_TERMINATE
+          - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
 
 # Creation de l'auto scaling group
   WordPressLaunchConfig:
@@ -261,19 +270,20 @@ Resources:
         - !Ref WebsiteEC2SecurityGroup
       # Continuer script bash
       UserData:
-        Fn::Base64: !Sub |
-          #!/bin/bash
-          sudo yum update -y
-          sudo yum upgrade -y
-          sudo mkdir /srv/wordpress
-          sudo yum install amazon-efs-utils -y
-          sudo amazon-linux-extras install docker
-          sudo service docker start
-          sudo usermod -a -G docker ec2-user
-          sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
-          sudo chmod +x /usr/local/bin/docker-compose
-          sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
-          sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            sudo yum update -y
+            sudo yum upgrade -y
+            sudo mkdir /srv/wordpress
+            sudo yum install amazon-efs-utils -y
+            sudo amazon-linux-extras install docker
+            sudo service docker start
+            sudo usermod -a -G docker ec2-user
+            sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
+            sudo chmod +x /usr/local/bin/docker-compose
+            sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
+            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
 
     DependsOn:
       - "MonVPC"
@@ -392,7 +402,7 @@ Resources:
       PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: '1'
-      Cooldown: 120
+      Cooldown: '120'
 
   DiminutionCharge:
     Type: AWS::AutoScaling::ScalingPolicy
@@ -401,15 +411,21 @@ Resources:
       PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: '-1'
-      Cooldown: 120
+      Cooldown: '120'
   
 # Ajout adresse mail d'alerte
   AlarmTopic:
     Type: AWS::SNS::Topic
-    Properties: 
-      Subscription:
-        - Endpoint: !Ref MailAlarm
-          Protocol: email
+    Properties:
+      DisplayName: Mail pour alerte AWS
+
+# Subscription
+  MySubscription:
+      Type: AWS::SNS::Subscription
+      Properties:
+        Endpoint: !Ref MailAlarm
+        Protocol: email
+        TopicArn: !Ref AlarmTopic
 
 # Parametrage des parametres de l alarme CPU
   AlarmCPUHight:
@@ -417,17 +433,17 @@ Resources:
     Properties:
       AlarmDescription: CPU alarme instances EC2
       AlarmActions:
-        - !Ref AlarmTopic
         - !Ref AugmentationCharge
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: 10
-      EvaluationPeriods: 1
-      Threshold: 80
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '80'
       ComparisonOperator: GreaterThanThreshold
+      TreatMissingData: missing
       Dimensions:
-      - Name: AutoscalingGroup
+      - Name: AutoscalingGroupName
         Value: !Ref WebsiteScalingGroup
 
   AlarmCPULow:
@@ -435,15 +451,15 @@ Resources:
     Properties:
       AlarmDescription: CPU alarme instances EC2
       AlarmActions:
-        - !Ref AlarmTopic
         - !Ref DiminutionCharge
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: 10
-      EvaluationPeriods: 1
-      Threshold: 50
+      Period: '60'
+      EvaluationPeriods: '1'
+      Threshold: '50'
       ComparisonOperator: LessThanThreshold
+      TreatMissingData: missing
       Dimensions:
-      - Name: AutoscalingGroup
+      - Name: AutoscalingGroupName
         Value: !Ref WebsiteScalingGroup
