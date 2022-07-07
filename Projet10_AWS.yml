@@ -49,6 +49,16 @@ Parameters:
     Description: Mail pour les alertes EC2
     Type: String
 
+  VPNPublicIP:
+    Default: 10.0.0.1/24
+    Description: IP Publique du VPN local
+    Type: String
+
+  VPNDistantIP:
+    Default: 12.0.0.1/24
+    Description: IP locale du VPN distant a joindre
+    Type: String
+
 ########## Definition des Ressources necessaires pour notre reseau ##########
 
 Resources:
@@ -74,7 +84,7 @@ Resources:
       CidrBlock: 10.0.101.0/24
       Tags:
         - Key: Name
-          Value: "MainVPC-private-a"
+          Value: MonVPC-private-a
       VpcId: !Ref MonVPC
       
   PrivateSubnetB:
@@ -85,7 +95,7 @@ Resources:
         CidrBlock: 10.0.102.0/24
         Tags:
           - Key: Name
-            Value: "MainVPC-private-b"
+            Value: MonVPC-private-b
         VpcId: !Ref MonVPC
 
   PrivateSubnetC:
@@ -96,7 +106,7 @@ Resources:
       CidrBlock: 10.0.103.0/24
       Tags:
         - Key: Name
-          Value: "MainVPC-private-c"
+          Value: MonVPC-private-c
       VpcId: !Ref MonVPC
         
   PublicSubnetA:
@@ -107,7 +117,7 @@ Resources:
       CidrBlock: 10.0.1.0/24
       Tags:
         - Key: Name
-          Value: "MainVPC-public-a"
+          Value: MonVPC-public-a
       VpcId: !Ref MonVPC
       
   PublicSubnetB:
@@ -118,7 +128,7 @@ Resources:
       CidrBlock: 10.0.2.0/24
       Tags:
         - Key: Name
-          Value: "MainVPC-public-b"
+          Value: MonVPC-public-b
       VpcId: !Ref MonVPC
 
 ########## Creation de la passerelle internet ##########
@@ -128,7 +138,7 @@ Resources:
     Properties:
       Tags:
         - Key: Name
-          Value: "MainVPC-InternetGateway"
+          Value: MonVPC-InternetGateway
 
 # Rattachement de la passerelle internet
   AttachInternetGateway:
@@ -146,7 +156,7 @@ Resources:
       VpcId: !Ref MonVPC
       Tags:
         - Key: Name
-          Value: MainVPC-route-public-a
+          Value: MonVPC-route-public-a
   
   AttachPublicRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -168,7 +178,7 @@ Resources:
       VpcId: !Ref MonVPC
       Tags:
         - Key: Name
-          Value: MainVPC-route-public-b
+          Value: MonVPC-route-public-b
     
   AttachPublicRouteTableB:
     Type: AWS::EC2::SubnetRouteTableAssociation
@@ -182,6 +192,30 @@ Resources:
       DestinationCidrBlock: 0.0.0.0/0
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableB
+  
+  # Table de routage pour le sous-reseau prive C, VPN
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MonVPC-route-private-c
+  
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateSubnetC
+  
+  VPNRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      GatewayId: !Ref VPNGateway
+      RouteTableId: !Ref PrivateRouteTableC
+    DependsOn:
+      - "VPNGateway"
 
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
@@ -203,6 +237,14 @@ Resources:
         - IpProtocol: tcp
           FromPort: 53
           ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
@@ -265,6 +307,7 @@ Resources:
       ImageId: ami-02541b8af977f6cdd
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
+      InstanceMonitoring: true
       KeyName: Cle_USP10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
@@ -463,3 +506,72 @@ Resources:
       Dimensions:
       - Name: AutoscalingGroupName
         Value: !Ref WebsiteScalingGroup
+
+########## Mise en place du VPN ##########
+  VPNCustomerGateway:
+    Type: AWS::EC2::CustomerGateway
+    Properties:
+      Type: ipsec.1
+      BgpAsn: 65000
+      IpAddress: !Ref VPNPublicIP
+
+  VPNGateway:
+    Type: AWS::EC2::VPNGateway
+    Properties:
+      Type: ipsec.1
+      Tags:
+        - Key: Key1
+          Value: TestCle1
+  
+  VPNGatewayAttach:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      VpnGatewayId: !Ref VPNGateway
+  
+  VPNRouteStatique:
+    Type: AWS::EC2::VPNConnectionRoute
+    Properties:
+      DestinationCidrBlock: !Ref VPNDistantIP
+      VpnConnectionId: !Ref VPNConnect
+    
+  VPNConnect:
+    Type: AWS::EC2::VPNConnection
+    Properties:
+      Type: ipsec.1
+      StaticRoutesOnly: true
+      CustomerGatewayId: !Ref VPNCustomerGateway
+      VpnGatewayId: !Ref VPNGateway
+
+########## Creation des instances EC2 en reseau prive C ##########
+# Instance EC2 pour Intranet
+  EC2Intranet:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0ad0923fe3bd430fa
+      InstanceType: t2.micro
+      KeyName: Cle_USP10
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: true
+          GroupSet: 
+            - Ref: WebsiteEC2SecurityGroup
+          SubnetId: !Ref PrivateSubnetC
+      # Continuer script bash
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            sudo apt update && upgrade
+            sudo apt install wget -y
+            sudo apt install apach2 apache2-utils php libapache2-mod-php php-common php-curl -y
+
+# Instance EC2 pour le VPN
+  VPNInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-0ad0923fe3bd430fa
+      InstanceType: t2.micro
+      KeyName: Cle_USP10
+      NetworkInterfaces:
+        
