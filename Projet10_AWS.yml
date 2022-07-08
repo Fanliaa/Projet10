@@ -49,16 +49,6 @@ Parameters:
     Description: Mail pour les alertes EC2
     Type: String
 
-  VPNPublicIP:
-    Default: 10.0.0.1/24
-    Description: IP Publique du VPN local
-    Type: String
-
-  VPNDistantIP:
-    Default: 12.0.0.1/24
-    Description: IP locale du VPN distant a joindre
-    Type: String
-
 ########## Definition des Ressources necessaires pour notre reseau ##########
 
 Resources:
@@ -480,7 +470,7 @@ Resources:
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: '60'
+      Period: '300'
       EvaluationPeriods: '1'
       Threshold: '80'
       ComparisonOperator: GreaterThanThreshold
@@ -498,7 +488,7 @@ Resources:
       MetricName: CPUUtilization
       Namespace: AWS/EC2
       Statistic: Average
-      Period: '60'
+      Period: '300'
       EvaluationPeriods: '1'
       Threshold: '50'
       ComparisonOperator: LessThanThreshold
@@ -513,7 +503,7 @@ Resources:
     Properties:
       Type: ipsec.1
       BgpAsn: 65000
-      IpAddress: !Ref VPNPublicIP
+      IpAddress: 31.34.20.95
 
   VPNGateway:
     Type: AWS::EC2::VPNGateway
@@ -532,7 +522,7 @@ Resources:
   VPNRouteStatique:
     Type: AWS::EC2::VPNConnectionRoute
     Properties:
-      DestinationCidrBlock: !Ref VPNDistantIP
+      DestinationCidrBlock: 10.35.20.0/24
       VpnConnectionId: !Ref VPNConnect
     
   VPNConnect:
@@ -548,7 +538,7 @@ Resources:
   EC2Intranet:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0ad0923fe3bd430fa
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       KeyName: Cle_USP10
       NetworkInterfaces:
@@ -556,22 +546,33 @@ Resources:
           AssociatePublicIpAddress: true
           GroupSet: 
             - Ref: WebsiteEC2SecurityGroup
-          SubnetId: !Ref PrivateSubnetC
+          SubnetId: !Ref PrivateSubnetA
       # Continuer script bash
       UserData:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
             sudo apt update && upgrade
-            sudo apt install wget -y
             sudo apt install apach2 apache2-utils php libapache2-mod-php php-common php-curl -y
+            echo "Hello Word" >> /var/www/apach2/index.html
 
 # Instance EC2 pour le VPN
   VPNInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0ad0923fe3bd430fa
+      ImageId: ami-0f06859cddde6a687
       InstanceType: t2.micro
       KeyName: Cle_USP10
       NetworkInterfaces:
-        
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: false
+          GroupSet:
+            - Ref: WebsiteEC2SecurityGroup
+          SubnetId: !Ref PrivateSubnetC
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            sudo apt update
+            sudo apt upgrade
+            sudo systemctl start wg-quick@wg-client0.service
