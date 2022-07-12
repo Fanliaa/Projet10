@@ -121,7 +121,7 @@ Resources:
           Value: MonVPC-public-b
       VpcId: !Ref MonVPC
 
-########## Creation de la passerelle internet ##########
+########## Creation de la passerelle internet Pour les reseaux publics A et B ##########
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -136,6 +136,35 @@ Resources:
     Properties:
       VpcId: !Ref MonVPC
       InternetGatewayId: !Ref InternetGateway
+
+########## Creation de la NAT Gateway Pour le reseau prive C ##########
+  NatEIPC:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
+
+  InternetGatewayNatC:
+    Type: AWS::EC2::InternetGateway
+    Properties:
+      Tags:
+        - Key: Name
+          Value: MonVPC-InternetGateway
+
+  AttachInternetGatewayNatC:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      InternetGatewayId: !Ref InternetGatewayNatC
+
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIPC.AllocationId
+      SubnetId: !Ref PrivateSubnetC
+      Tags:
+        - Key: Name
+          Value: natgateway-private-c
+    DependsOn: AttachInternetGatewayNatC
 
 ########## Definition de la table de routage ##########
 
@@ -202,10 +231,8 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      GatewayId: !Ref VPNGateway
+      GatewayId: !Ref NatGateway
       RouteTableId: !Ref PrivateRouteTableC
-    DependsOn:
-      - "VPNGateway"
 
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
@@ -214,28 +241,42 @@ Resources:
       GroupDescription: Website EC2 Security Group
       SecurityGroupEgress:
         - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: -1
+          CidrIp: 10.0.102.0/24
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 10.0.102.0/24
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 10.0.102.0/24
         - IpProtocol: tcp
           FromPort: 53
           ToPort: 53
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: udp
-          FromPort: 51820
-          ToPort: 51820
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 10.0.102.0/24       
         - IpProtocol: icmp
           FromPort: -1
           ToPort: -1
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 10.0.102.0/24          
       VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
@@ -334,7 +375,11 @@ Resources:
 #         - IpProtocol: tcp
 #           FromPort: 3306
 #           ToPort: 3306
-#           CidrIp: 0.0.0.0/0
+#           CidrIp: 10.0.101.0/24
+#         - IpProtocol: tcp
+#           FromPort: 3306
+#           ToPort: 3306
+#           CidrIp: 10.0.102.0/24
 #       VpcId: !Ref MonVPC
 
 # # Creation groupe sous-reseau RDS
@@ -373,15 +418,15 @@ Resources:
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.101.0/24
         - IpProtocol: tcp
-          FromPort: 111
-          ToPort: 111
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 53
-          ToPort: 53
-          CidrIp: 0.0.0.0/0
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 10.0.102.0/24  
+        # - IpProtocol: tcp
+        #   FromPort: 111
+        #   ToPort: 111
+        #   CidrIp: 10.0.101.0/0 
       VpcId: !Ref MonVPC
 
   # Creation des cibles de montage pour chaque Subnet
@@ -497,43 +542,39 @@ Resources:
       - Name: AutoscalingGroupName
         Value: !Ref WebsiteScalingGroup
 
-########## Mise en place du VPN ##########
-  VPNCustomerGateway:
-    Type: AWS::EC2::CustomerGateway
-    Properties:
-      Type: ipsec.1
-      BgpAsn: 65000
-      IpAddress: 31.34.20.95
-
-  VPNGateway:
-    Type: AWS::EC2::VPNGateway
-    Properties:
-      Type: ipsec.1
-      Tags:
-        - Key: Key1
-          Value: TestCle1
-  
-  VPNGatewayAttach:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref MonVPC
-      VpnGatewayId: !Ref VPNGateway
-  
-  VPNRouteStatique:
-    Type: AWS::EC2::VPNConnectionRoute
-    Properties:
-      DestinationCidrBlock: 10.35.20.0/24
-      VpnConnectionId: !Ref VPNConnect
-    
-  VPNConnect:
-    Type: AWS::EC2::VPNConnection
-    Properties:
-      Type: ipsec.1
-      StaticRoutesOnly: true
-      CustomerGatewayId: !Ref VPNCustomerGateway
-      VpnGatewayId: !Ref VPNGateway
-
 ########## Creation des instances EC2 en reseau prive C ##########
+# Groupe de securite pour le VPN
+  VPNSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+          CidrIp: 10.0.103.0/24
+      VpcId: !Ref MonVPC
+
+# Groupe de securite pour la vm intranet
+  IntranetSecurityGroup:
+    Type:  AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: Website EC2 Security Group
+      SecurityGroupEgress:
+        - IpProtocol: udp
+          FromPort: 51820
+          ToPort: 51820
+          CidrIp: 10.0.103.0/24
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 53
+          ToPort: 53
+          CidrIp: 0.0.0.0/0
+      VpcId: !Ref MonVPC
+
 # Instance EC2 pour Intranet
   EC2Intranet:
     Type: AWS::EC2::Instance
@@ -545,16 +586,16 @@ Resources:
         - DeviceIndex: 0
           AssociatePublicIpAddress: true
           GroupSet: 
-            - Ref: WebsiteEC2SecurityGroup
-          SubnetId: !Ref PrivateSubnetA
+            - Ref: IntranetSecurityGroup
+          SubnetId: !Ref PrivateSubnetC
       # Continuer script bash
       UserData:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
             sudo apt update && upgrade
-            sudo apt install apach2 apache2-utils php libapache2-mod-php php-common php-curl -y
-            echo "Hello Word" >> /var/www/apach2/index.html
+            sudo apt install apache2 apache2-utils php libapache2-mod-php php-common php-curl -y
+            echo "Hello Word" >> /var/www/apache2/index.html
 
 # Instance EC2 pour le VPN
   VPNInstance:
@@ -563,11 +604,12 @@ Resources:
       ImageId: ami-0f06859cddde6a687
       InstanceType: t2.micro
       KeyName: Cle_USP10
+      SourceDestCheck: false
       NetworkInterfaces:
         - DeviceIndex: 0
           AssociatePublicIpAddress: false
           GroupSet:
-            - Ref: WebsiteEC2SecurityGroup
+            - Ref: VPNSecurityGroup
           SubnetId: !Ref PrivateSubnetC
       UserData:
         Fn::Base64:
