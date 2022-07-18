@@ -138,41 +138,27 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
 
 ########## Creation de la NAT Gateway Pour le reseau prive C ##########
-  # NatEIPC:
-  #   Type: AWS::EC2::EIP
-  #   Properties:
-  #     Domain: vpc
+  NatEIPC:
+    Type: AWS::EC2::EIP
+    Properties:
+      Domain: vpc
 
-  # AssiociateEIP:
-  #   Type: AWS::EC2::EIPAssociation
-  #   Properties:
-  #     EIP: !Ref NatEIPC
-  #     InstanceId: !Ref VPNInstance
-  #   DependsOn: VPNInstance
+  AttachVPNGatewayC:
+    Type: AWS::EC2::VPCGatewayAttachment
+    Properties:
+      VpcId: !Ref MonVPC
+      InternetGatewayId: !Ref InternetGateway
 
-  # InternetGatewayNatC:
-  #   Type: AWS::EC2::InternetGateway
-  #   Properties:
-  #     Tags:
-  #       - Key: Name
-  #         Value: MonVPC-InternetGateway
-
-  # AttachVPNGatewayC:
-  #   Type: AWS::EC2::VPCGatewayAttachment
-  #   Properties:
-  #     VpcId: !Ref MonVPC
-  #     InternetGatewayId: !Ref InternetGateway
-
-  # NatGateway:
-  #   Type: AWS::EC2::NatGateway
-  #   Properties:
-  #     AllocationId: !GetAtt NatEIPC.AllocationId
-  #     SubnetId: !Ref PrivateSubnetC
-  #     ConnectivityType: public
-  #     Tags:
-  #       - Key: Name
-  #         Value: natgateway-private-c
-  #   DependsOn: AttachInternetGateway
+  NatGateway:
+    Type: AWS::EC2::NatGateway
+    Properties:
+      AllocationId: !GetAtt NatEIPC.AllocationId
+      SubnetId: !Ref PrivateSubnetC
+      ConnectivityType: public
+      Tags:
+        - Key: Name
+          Value: natgateway-private-c
+    DependsOn: AttachInternetGateway
 
 ########## Definition de la table de routage ##########
 
@@ -221,26 +207,35 @@ Resources:
       RouteTableId: !Ref PublicRouteTableB
   
   # Table de routage pour le sous-reseau prive C, VPN
-  # PrivateRouteTableC:
-  #   Type: AWS::EC2::RouteTable
-  #   Properties:
-  #     VpcId: !Ref MonVPC
-  #     Tags:
-  #       - Key: Name
-  #         Value: MonVPC-route-private-c
+  PrivateRouteTableC:
+    Type: AWS::EC2::RouteTable
+    Properties:
+      VpcId: !Ref MonVPC
+      Tags:
+        - Key: Name
+          Value: MonVPC-route-private-c
   
-  # AttachPrivateRouteTableC:
-  #   Type: AWS::EC2::SubnetRouteTableAssociation
-  #   Properties:
-  #     RouteTableId: !Ref PrivateRouteTableC
-  #     SubnetId: !Ref PrivateSubnetC
+  AttachPrivateRouteTableC:
+    Type: AWS::EC2::SubnetRouteTableAssociation
+    Properties:
+      RouteTableId: !Ref PrivateRouteTableC
+      SubnetId: !Ref PrivateSubnetC
   
-  # VPNRouteC:
-  #   Type: AWS::EC2::Route
-  #   Properties:
-  #     DestinationCidrBlock: 0.0.0.0/0
-  #     GatewayId: !Ref NatGateway
-  #     RouteTableId: !Ref PrivateRouteTableC
+  DefaultRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 0.0.0.0/0
+      NatGatewayId: !Ref NatGateway
+      RouteTableId: !Ref PrivateRouteTableC
+    DependsOn: NatGateway
+  
+  VPNRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 192.168.56.0/24
+      InstanceId: !Ref VPNInstance
+      RouteTableId: !Ref PrivateRouteTableC
+    DependsOn: NatGateway
 
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
@@ -343,7 +338,7 @@ Resources:
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-0d9858aa3c6322f73
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
       InstanceMonitoring: true
@@ -362,7 +357,6 @@ Resources:
             sudo amazon-linux-extras install epel -y
             sudo yum install stress -y
             sudo yum install htop -y
-            sudo stress --cpu 8 --io 4 &
             sudo amazon-linux-extras install docker
             sudo service docker start
             sudo usermod -a -G docker ec2-user
@@ -370,7 +364,16 @@ Resources:
             sudo chmod +x /usr/local/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
             sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
-            sudo htop
+            sudo apt-get install docker-ce docker-ce-cli containerd.io
+            if [ ! -d "/srv/wordpress/wp-config.php" ];then
+              sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+              sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
+              sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate
+              sudo docker exec WP10 wp plugin update --all
+              sudp docker exec WP10 sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" wp-config.php
+            else
+              echo "Le fichier wp-config existe déjà."
+            fi
 
     DependsOn:
       - "MonVPC"
@@ -379,46 +382,46 @@ Resources:
 
 ########## Mise en place du service RDS ##########
 
-# Creation du groupe de securite RDS
-#   RDSSecurityGroup:
-#     Type: AWS::EC2::SecurityGroup
-#     Properties:
-#       GroupDescription: RDS Security Group
-#       SecurityGroupIngress:
-#         - IpProtocol: tcp
-#           FromPort: 3306
-#           ToPort: 3306
-#           CidrIp: 10.0.101.0/24
-#         - IpProtocol: tcp
-#           FromPort: 3306
-#           ToPort: 3306
-#           CidrIp: 10.0.102.0/24
-#       VpcId: !Ref MonVPC
+Creation du groupe de securite RDS
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.102.0/24
+      VpcId: !Ref MonVPC
 
-# # Creation groupe sous-reseau RDS
-#   DBSubnetGroup:
-#     Type: AWS::RDS::DBSubnetGroup
-#     Properties:
-#       DBSubnetGroupDescription: Groupe de sous-reseau RDS
-#       DBSubnetGroupName: RDSGroup
-#       SubnetIds:
-#         - !Ref PrivateSubnetA
-#         - !Ref PrivateSubnetB
+# Creation groupe sous-reseau RDS
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupName: RDSGroup
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
 
-# # Creation du RDS
-#   MyDB:
-#     Type: AWS::RDS::DBInstance
-#     Properties:
-#       AllocatedStorage: '5'
-#       DBInstanceClass: !Ref DBClass
-#       DBName: !Ref DBName
-#       Engine: mariadb
-#       MasterUsername: !Ref DBUser
-#       MasterUserPassword: !Ref DBPassword
-#       MultiAZ: True
-#       DBSubnetGroupName: !Ref DBSubnetGroup
-#       VPCSecurityGroups:
-#         - !GetAtt RDSSecurityGroup.GroupId
+# Creation du RDS
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBName
+      Engine: mariadb
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: True
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
 
 ########## Mise en place de l'EFS pour Wordpress ##########
 
@@ -472,16 +475,45 @@ Resources:
           Value: NomTest
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-  # BucketS3:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: bucket-projet-aws
-  #     AccessControl: Private
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: True
-  #       BlockPublicPolicy: True
-  #       IgnorePublicAcls: True
-  #       RestrictPublicBuckets: True
+# Creation d'un utilisateur pour Bucket S3
+  GroupeS3:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Administrator
+
+  UserS3:
+    Type: AWS::IAM::User
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
+  
+  MyAccessKeyS3:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref UserS3
+  
+  SecretAccessKeyS3:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      SecretString: !Join
+        - ""
+        - - '{"AccessKeyId":"'
+          - !Ref MyAccessKeyS3
+          - '","SecretAccessKey":"'
+          - !GetAtt MyAccessKeyS3.SecretAccessKey
+          - '"}'
+
+# Creation du Bucket S3
+  BucketS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bucket-projet-aws
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
 
 ########## Mise en place des alerte et parametres de surveillance ##########
 
@@ -490,7 +522,6 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      # PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: 1
       Cooldown: '300'
@@ -500,13 +531,11 @@ Resources:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
       AdjustmentType: ChangeInCapacity
-      # PolicyType: SimpleScaling
       AutoScalingGroupName: !Ref WebsiteScalingGroup
       ScalingAdjustment: -1
       Cooldown: '300'
     DependsOn: WebsiteScalingGroup
 
-  
 # Ajout adresse mail d'alerte
   AlarmTopic:
     Type: AWS::SNS::Topic
@@ -515,15 +544,6 @@ Resources:
       Subscription:
           - Endpoint: !Ref MailAlarm
             Protocol: email
-    DependsOn: PublicRouteA
-
-# Subscription
-  # MySubscription:
-  #     Type: AWS::SNS::Subscription
-  #     Properties:
-  #       Endpoint: !Ref MailAlarm
-  #       Protocol: email
-  #       TopicArn: !Ref AlarmTopic
 
 # Parametrage des parametres de l alarme CPU
   AlarmCPUHight:
@@ -539,7 +559,6 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 80
       ComparisonOperator: GreaterThanThreshold
-      # TreatMissingData: missing
       Dimensions:
       - Name: AutoScalingGroupName
         Value: !Ref WebsiteScalingGroup
@@ -558,7 +577,6 @@ Resources:
       EvaluationPeriods: 1
       Threshold: 50
       ComparisonOperator: LessThanThreshold
-      # TreatMissingData: missing
       Dimensions:
       - Name: AutoScalingGroupName
         Value: !Ref WebsiteScalingGroup
@@ -598,45 +616,45 @@ Resources:
       VpcId: !Ref MonVPC
 
 # Instance EC2 pour Intranet
-  # EC2Intranet:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     ImageId: ami-002ff2c881c910aa8
-  #     InstanceType: t2.micro
-  #     KeyName: Cle_USP10
-  #     NetworkInterfaces:
-  #       - DeviceIndex: 0
-  #         AssociatePublicIpAddress: true
-  #         GroupSet: 
-  #           - Ref: IntranetSecurityGroup
-  #         SubnetId: !Ref PrivateSubnetC
-  #     # Continuer script bash
-  #     UserData:
-  #       Fn::Base64:
-  #         Fn::Sub: |
-  #           #!/bin/bash
-  #           sudo apt update && upgrade
-  #           sudo apt install apache2 apache2-utils php libapache2-mod-php php-common php-curl -y
-  #           echo "Hello Word" >> /var/www/apache2/index.html
+  EC2Intranet:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-024527629f55e9322
+      InstanceType: t2.micro
+      KeyName: Cle_USP10
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: true
+          GroupSet: 
+            - Ref: IntranetSecurityGroup
+          SubnetId: !Ref PrivateSubnetC
+      # Continuer script bash
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            sudo apt update && upgrade
+            sudo apt install apache2 apache2-utils php libapache2-mod-php php-common php-curl -y
+            echo "Hello Word" >> /var/www/apache2/index.html
 
 # Instance EC2 pour le VPN
-  # VPNInstance:
-  #   Type: AWS::EC2::Instance
-  #   Properties:
-  #     ImageId: ami-0f06859cddde6a687  A CHANGER
-  #     InstanceType: t2.micro
-  #     KeyName: Cle_USP10
-  #     SourceDestCheck: false
-  #     NetworkInterfaces:
-  #       - DeviceIndex: 0
-  #         AssociatePublicIpAddress: false
-  #         GroupSet:
-  #           - Ref: VPNSecurityGroup
-  #         SubnetId: !Ref PrivateSubnetC
-  #     UserData:
-  #       Fn::Base64:
-  #         Fn::Sub: |
-  #           #!/bin/bash
-  #           sudo apt update
-  #           sudo apt upgrade
-  #           sudo systemctl start wg-quick@wg-client0.service
+  VPNInstance:
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-058f767315a3c7279
+      InstanceType: t2.micro
+      KeyName: Cle_USP10
+      SourceDestCheck: false
+      NetworkInterfaces:
+        - DeviceIndex: 0
+          AssociatePublicIpAddress: false
+          GroupSet:
+            - Ref: VPNSecurityGroup
+          SubnetId: !Ref PrivateSubnetC
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash
+            sudo apt update
+            sudo apt upgrade
+            sudo systemctl start wg-quick@wg-client0.service
