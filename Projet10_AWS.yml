@@ -154,12 +154,6 @@ Resources:
     Properties:
       Domain: vpc
 
-  AttachVPNGatewayC:
-    Type: AWS::EC2::VPCGatewayAttachment
-    Properties:
-      VpcId: !Ref MonVPC
-      InternetGatewayId: !Ref InternetGateway
-
   NatGateway:
     Type: AWS::EC2::NatGateway
     Properties:
@@ -236,7 +230,7 @@ Resources:
     Type: AWS::EC2::Route
     Properties:
       DestinationCidrBlock: 0.0.0.0/0
-      NatGatewayId: !Ref NatGateway
+      GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableC
 
   # Table de routage pour le sous-reseau prive C, VPN
