@@ -127,6 +127,8 @@ Resources:
       # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1c
       CidrBlock: 10.0.3.0/24
+      #A SUPPRIMER UNE FOIS TOUT OK!!!
+      MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
           Value: MonVPC-public-c
@@ -279,10 +281,6 @@ Resources:
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        - IpProtocol: udp
-          FromPort: 51820
-          ToPort: 51820
-          CidrIp: 0.0.0.0/0
         # - IpProtocol: tcp
         #   FromPort: 80
         #   ToPort: 80
@@ -310,7 +308,7 @@ Resources:
         # - IpProtocol: icmp
         #   FromPort: -1
         #   ToPort: -1
-        #   CidrIp: 10.0.102.0/24          
+        #   CidrIp: 10.0.102.0/24
       VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
@@ -322,6 +320,13 @@ Resources:
       Port: 80
       Protocol: HTTP
       VpcId: !Ref MonVPC
+      TargetGroupAttributes:
+      - Key: stickiness.enabled
+        Value: true 
+      - Key: stickiness.type
+        Value: lb_cookie
+      - Key: stickiness.lb_cookie.duration_seconds
+        Value: 300
 
   LoadBalancer:
     Type: AWS::ElasticLoadBalancingV2::LoadBalancer
@@ -371,17 +376,16 @@ Resources:
     Properties:
       ImageId: ami-0d9858aa3c6322f73
       InstanceType: t2.micro
-      AssociatePublicIpAddress: true
+      AssociatePublicIpAddress: false
       InstanceMonitoring: true
       KeyName: Cle_USP10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
-      # Continuer script bash
       UserData:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
-            sudo yum update -y
+            sudo yum update
             sudo yum upgrade -y
             sudo mkdir /srv/wordpress
             sudo yum install amazon-efs-utils -y
@@ -395,54 +399,64 @@ Resources:
             sudo chmod +x /usr/local/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
             sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
-
+            sudo apt-get install docker-ce docker-ce-cli containerd.io
+            if [ ! -d "/srv/wordpress/wp-config.php" ];then
+              sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
+              sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
+              sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate
+              sudo docker exec WP10 wp plugin update --all
+              sudo docker exec WP10 sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" wp-config.php
+            else
+              echo "Le fichier wp-config existe déjà."
+            fi
     DependsOn:
       - "MonVPC"
       - "MountTargetA"
       - "MountTargetB"
+      - "LoadBalancer"
 
 ########## Mise en place du service RDS ##########
 
 # Creation du groupe de securite RDS
-#   RDSSecurityGroup:
-#     Type: AWS::EC2::SecurityGroup
-#     Properties:
-#       GroupDescription: RDS Security Group
-#       SecurityGroupIngress:
-#         - IpProtocol: tcp
-#           FromPort: 3306
-#           ToPort: 3306
-#           CidrIp: 10.0.101.0/24
-#         - IpProtocol: tcp
-#           FromPort: 3306
-#           ToPort: 3306
-#           CidrIp: 10.0.102.0/24
-#       VpcId: !Ref MonVPC
+  RDSSecurityGroup:
+    Type: AWS::EC2::SecurityGroup
+    Properties:
+      GroupDescription: RDS Security Group
+      SecurityGroupIngress:
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.101.0/24
+        - IpProtocol: tcp
+          FromPort: 3306
+          ToPort: 3306
+          CidrIp: 10.0.102.0/24
+      VpcId: !Ref MonVPC
 
-# # Creation groupe sous-reseau RDS
-#   DBSubnetGroup:
-#     Type: AWS::RDS::DBSubnetGroup
-#     Properties:
-#       DBSubnetGroupDescription: Groupe de sous-reseau RDS
-#       DBSubnetGroupName: RDSGroup
-#       SubnetIds:
-#         - !Ref PrivateSubnetA
-#         - !Ref PrivateSubnetB
+# Creation groupe sous-reseau RDS
+  DBSubnetGroup:
+    Type: AWS::RDS::DBSubnetGroup
+    Properties:
+      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupName: RDSGroup
+      SubnetIds:
+        - !Ref PrivateSubnetA
+        - !Ref PrivateSubnetB
 
-# # Creation du RDS
-#   MyDB:
-#     Type: AWS::RDS::DBInstance
-#     Properties:
-#       AllocatedStorage: '5'
-#       DBInstanceClass: !Ref DBClass
-#       DBName: !Ref DBName
-#       Engine: mariadb
-#       MasterUsername: !Ref DBUser
-#       MasterUserPassword: !Ref DBPassword
-#       MultiAZ: True
-#       DBSubnetGroupName: !Ref DBSubnetGroup
-#       VPCSecurityGroups:
-#         - !GetAtt RDSSecurityGroup.GroupId
+# Creation du RDS
+  MyDB:
+    Type: AWS::RDS::DBInstance
+    Properties:
+      AllocatedStorage: '5'
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBName
+      Engine: mariadb
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
+      MultiAZ: True
+      DBSubnetGroupName: !Ref DBSubnetGroup
+      VPCSecurityGroups:
+        - !GetAtt RDSSecurityGroup.GroupId
 
 ########## Mise en place de l'EFS pour Wordpress ##########
 
@@ -497,44 +511,44 @@ Resources:
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
 # Creation d'un utilisateur pour Bucket S3
-  # GroupeS3:
-  #   Type: AWS::IAM::Group
-  #   Properties:
-  #     GroupName: Administrator
+  GroupeS3:
+    Type: AWS::IAM::Group
+    Properties:
+      GroupName: Administrator
 
-  # UserS3:
-  #   Type: AWS::IAM::User
-  #   Properties:
-  #     ManagedPolicyArns:
-  #       - arn:aws:iam::aws:policy/AmazonS3FullAccess
+  UserS3:
+    Type: AWS::IAM::User
+    Properties:
+      ManagedPolicyArns:
+        - arn:aws:iam::aws:policy/AmazonS3FullAccess
   
-  # MyAccessKeyS3:
-  #   Type: AWS::IAM::AccessKey
-  #   Properties:
-  #     UserName: !Ref UserS3
+  MyAccessKeyS3:
+    Type: AWS::IAM::AccessKey
+    Properties:
+      UserName: !Ref UserS3
   
-  # SecretAccessKeyS3:
-  #   Type: AWS::SecretsManager::Secret
-  #   Properties:
-  #     SecretString: !Join
-  #       - ""
-  #       - - '{"AccessKeyId":"'
-  #         - !Ref MyAccessKeyS3
-  #         - '","SecretAccessKey":"'
-  #         - !GetAtt MyAccessKeyS3.SecretAccessKey
-  #         - '"}'
+  SecretAccessKeyS3:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      SecretString: !Join
+        - ""
+        - - '{"AccessKeyId":"'
+          - !Ref MyAccessKeyS3
+          - '","SecretAccessKey":"'
+          - !GetAtt MyAccessKeyS3.SecretAccessKey
+          - '"}'
 
 # Creation du Bucket S3
-  # BucketS3:
-  #   Type: AWS::S3::Bucket
-  #   Properties:
-  #     BucketName: bucket-projet-aws
-  #     AccessControl: Private
-  #     PublicAccessBlockConfiguration:
-  #       BlockPublicAcls: True
-  #       BlockPublicPolicy: True
-  #       IgnorePublicAcls: True
-  #       RestrictPublicBuckets: True
+  BucketS3:
+    Type: AWS::S3::Bucket
+    Properties:
+      BucketName: bucket-projet-aws
+      AccessControl: Private
+      PublicAccessBlockConfiguration:
+        BlockPublicAcls: True
+        BlockPublicPolicy: True
+        IgnorePublicAcls: True
+        RestrictPublicBuckets: True
 
 ########## Mise en place des alerte et parametres de surveillance ##########
 
@@ -610,9 +624,28 @@ Resources:
     Properties:
       GroupDescription: Website EC2 Security Group
       SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
         - IpProtocol: udp
           FromPort: 51820
           ToPort: 51820
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 80
+          ToPort: 80
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
@@ -622,17 +655,36 @@ Resources:
     Properties:
       GroupDescription: Website EC2 Security Group
       SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 0.0.0.0/0
+      SecurityGroupIngress:
+        - IpProtocol: icmp
+          FromPort: -1
+          ToPort: -1
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
         - IpProtocol: udp
-          FromPort: 51820
-          ToPort: 51820
+          FromPort: 2049
+          ToPort: 2049
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 111
+          ToPort: 111
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: udp
+          FromPort: 111
+          ToPort: 111
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 53
-          ToPort: 53
+          FromPort: 22
+          ToPort: 22
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
@@ -640,29 +692,30 @@ Resources:
   EC2Intranet:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-024527629f55e9322
+      ImageId: ami-0fd026dbc511a26fe
       InstanceType: t2.micro
       KeyName: Cle_USP10
       NetworkInterfaces:
         - DeviceIndex: 0
-          AssociatePublicIpAddress: true
+          AssociatePublicIpAddress: false
           GroupSet: 
             - Ref: IntranetSecurityGroup
           SubnetId: !Ref PrivateSubnetC
-      # Continuer script bash
       UserData:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
-            sudo apt update && upgrade
-            sudo apt install apache2 apache2-utils php libapache2-mod-php php-common php-curl -y
-            echo "Hello Word" >> /var/www/apache2/index.html
+            sudo apt install nfs-common -y
+            sudo mkdir /var/www/html/nfs
+            sudo ip route add 10.35.20.0/24 via ${VPNInstance.PrivateIp}
+            sudo ip route add 192.168.1.0/24 via ${VPNInstance.PrivateIp}
+            sudo mount -v -t nfs 192.168.1.25:/srv/intranet /var/www/html/nfs
 
 # Instance EC2 pour le VPN
   VPNInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-025802ce6ba072a20
+      ImageId: ami-0fa5af1a7c44ebe49
       InstanceType: t2.micro
       KeyName: Cle_USP10
       SourceDestCheck: false
@@ -672,9 +725,20 @@ Resources:
           GroupSet:
             - Ref: VPNSecurityGroup
           SubnetId: !Ref PrivateSubnetC
-      # UserData:
-      #   Fn::Base64:
-      #     Fn::Sub: |
-      #       #!/bin/bash
-      #       sudo apt update
-      #       sudo apt upgrade
+
+  BastionEC2:  
+    Type: AWS::EC2::Instance
+    Properties:
+      ImageId: ami-024527629f55e9322
+      InstanceType: t2.micro
+      SecurityGroupIds:
+        - !Ref VPNSecurityGroup
+      SubnetId: !Ref PublicSubnetC
+      SourceDestCheck: false
+      KeyName: Cle_USP10
+      UserData:
+        Fn::Base64:
+          Fn::Sub: |
+            #!/bin/bash -xe
+            sudo apt update
+            sudo apt upgrade -y
