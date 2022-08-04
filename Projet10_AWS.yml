@@ -9,25 +9,25 @@ Description: >-
 ########## Definition des parametres pour nos outils ##########
 
 Parameters:
-  DBName:
-    Default: WordpressDB
-    Description: Nom de la BDD Wordpress
-    Type: String
+  # DBName:
+  #   Default: WordpressDB
+  #   Description: Nom de la BDD Wordpress
+  #   Type: String
 
-  DBUser:
-    Default: wpuser
-    Description: Nom de l'utilisateur Wordpress
-    Type: String
+  # DBUser:
+  #   Default: wpuser
+  #   Description: Nom de l'utilisateur Wordpress
+  #   Type: String
 
-  DBPassword:
-    Default: BtssioWP13!
-    Description: Mon de passe de la BDD Wordpress
-    Type: String
+  # DBPassword:
+  #   Default: BtssioWP13!
+  #   Description: Mon de passe de la BDD Wordpress
+  #   Type: String
 
-  DBClass:
-    Default: db.t2.micro
-    Description: Catégorie/Classe de notre instance RDS
-    Type: String
+  # DBClass:
+  #   Default: db.t2.micro
+  #   Description: Catégorie/Classe de notre instance RDS
+  #   Type: String
 
   IDWP:
     Default: fj
@@ -258,13 +258,13 @@ Resources:
       RouteTableId: !Ref PrivateRouteTableC
     DependsOn: NatGateway
   
-  VPNRouteC:
-    Type: AWS::EC2::Route
-    Properties:
-      DestinationCidrBlock: 192.168.56.0/24
-      InstanceId: !Ref VPNInstance
-      RouteTableId: !Ref PrivateRouteTableC
-    DependsOn: NatGateway
+  # VPNRouteC:
+  #   Type: AWS::EC2::Route
+  #   Properties:
+  #     DestinationCidrBlock: 192.168.56.0/24
+  #     InstanceId: !Ref VPNInstance
+  #     RouteTableId: !Ref PrivateRouteTableC
+  #   DependsOn: NatGateway
 
 # Creation du groupe de securite (firewall virtuel)
   WebsiteEC2SecurityGroup:
@@ -274,41 +274,23 @@ Resources:
       SecurityGroupEgress:
         - IpProtocol: -1
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: -1
-        #   CidrIp: 10.0.102.0/24
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 80
           ToPort: 80
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: tcp
-        #   FromPort: 80
-        #   ToPort: 80
-        #   CidrIp: 10.0.102.0/24
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: tcp
-        #   FromPort: 22
-        #   ToPort: 22
-        #   CidrIp: 10.0.102.0/24
         - IpProtocol: tcp
           FromPort: 53
           ToPort: 53
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: tcp
-        #   FromPort: 53
-        #   ToPort: 53
-        #   CidrIp: 10.0.102.0/24       
         - IpProtocol: icmp
           FromPort: -1
           ToPort: -1
           CidrIp: 0.0.0.0/0
-        # - IpProtocol: icmp
-        #   FromPort: -1
-        #   ToPort: -1
-        #   CidrIp: 10.0.102.0/24
       VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
@@ -362,22 +344,24 @@ Resources:
       MaxSize: 4
       TargetGroupARNs:
         - !Ref TargetGroup
-      NotificationConfigurations:
-        - TopicARN: !Ref AlarmTopic
-          NotificationTypes:
-          - autoscaling:EC2_INSTANCE_LAUNCH
-          - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
-          - autoscaling:EC2_INSTANCE_TERMINATE
-          - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
+      # NotificationConfigurations:
+      #   - TopicARN: !Ref AlarmTopic
+      #     NotificationTypes:
+      #     - autoscaling:EC2_INSTANCE_LAUNCH
+      #     - autoscaling:EC2_INSTANCE_LAUNCH_ERROR
+      #     - autoscaling:EC2_INSTANCE_TERMINATE
+      #     - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
 
 # Creation de l'auto scaling group
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
-      ImageId: ami-0d9858aa3c6322f73
+      ImageId: ami-0e4d9ed95865f3b40
       InstanceType: t2.micro
-      AssociatePublicIpAddress: false
+      AssociatePublicIpAddress: true
       InstanceMonitoring: true
+      InstanceMarketOptions:
+          MarketType: spot
       KeyName: Cle_USP10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
@@ -385,35 +369,39 @@ Resources:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
-            sudo yum update
-            sudo yum upgrade -y
             sudo mkdir /srv/wordpress
             sudo yum install amazon-efs-utils -y
             sudo amazon-linux-extras install epel -y
             sudo yum install stress -y
             sudo yum install htop -y
-            sudo amazon-linux-extras install docker
-            sudo service docker start
+            sudo amazon-linux-extras install docker -y
+            sudo yum update -y
+            sudo yum upgrade -y
+            sudo systemctl enable --now docker.service
             sudo usermod -a -G docker ec2-user
+            newgrp docker
             sudo curl -L https://github.com/docker/compose/releases/latest/download/docker-compose-$(uname -s)-$(uname -m) -o /usr/local/bin/docker-compose
             sudo chmod +x /usr/local/bin/docker-compose
+            sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
-            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wordpress_p10:test
-            sudo apt-get install docker-ce docker-ce-cli containerd.io
-            if [ ! -d "/srv/wordpress/wp-config.php" ];then
-              sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDB.Endpoint.Address}:3306 --allow-root
-              sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title=WordPress P10 --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
-              sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate
-              sudo docker exec WP10 wp plugin update --all
-              sudo docker exec WP10 sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" wp-config.php
+            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wpp10:first
+            sudo docker exec WP10 wp core is-installed --allow-root
+            if [ $? -eq 1 ];then
+              sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDBWP.Endpoint.Address}:3306 --allow-root
+              sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title='WordPress P10' --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
+              sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate --allow-root
+              sudo docker exec WP10 wp plugin update --all --allow-root
+              sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
             else
-              echo "Le fichier wp-config existe déjà."
+              sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
             fi
+            sudo docker exec WP10 chown -R www-data /var/www/html/
     DependsOn:
       - "MonVPC"
       - "MountTargetA"
       - "MountTargetB"
       - "LoadBalancer"
+      - "MyDBWP"
 
 ########## Mise en place du service RDS ##########
 
@@ -422,15 +410,18 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: RDS Security Group
+      SecurityGroupEgress:
+        - IpProtocol: -1
+          CidrIp: 10.0.0.0/16
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.101.0/24
+          CidrIp: 10.0.0.0/16
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.102.0/24
+          CidrIp: 10.0.0.0/16
       VpcId: !Ref MonVPC
 
 # Creation groupe sous-reseau RDS
@@ -444,15 +435,15 @@ Resources:
         - !Ref PrivateSubnetB
 
 # Creation du RDS
-  MyDB:
+  MyDBWP:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: '5'
-      DBInstanceClass: !Ref DBClass
-      DBName: !Ref DBName
+      DBInstanceClass: db.t2.micro
+      DBName: WordpressDB
       Engine: mariadb
-      MasterUsername: !Ref DBUser
-      MasterUserPassword: !Ref DBPassword
+      MasterUsername: wpuser
+      MasterUserPassword: BtssioWP13!
       MultiAZ: True
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
@@ -466,18 +457,10 @@ Resources:
     Properties:
       GroupDescription: EFS Security Group
       SecurityGroupIngress:
-        # - IpProtocol: tcp
-        #   FromPort: 2049
-        #   ToPort: 2049
-        #   CidrIp: 10.0.101.0/24
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
-          CidrIp: 0.0.0.0/0 
-        # - IpProtocol: tcp
-        #   FromPort: 111
-        #   ToPort: 111
-        #   CidrIp: 10.0.101.0/0 
+          CidrIp: 10.0.0.0/16
       VpcId: !Ref MonVPC
 
   # Creation des cibles de montage pour chaque Subnet
@@ -526,17 +509,6 @@ Resources:
     Type: AWS::IAM::AccessKey
     Properties:
       UserName: !Ref UserS3
-  
-  SecretAccessKeyS3:
-    Type: AWS::SecretsManager::Secret
-    Properties:
-      SecretString: !Join
-        - ""
-        - - '{"AccessKeyId":"'
-          - !Ref MyAccessKeyS3
-          - '","SecretAccessKey":"'
-          - !GetAtt MyAccessKeyS3.SecretAccessKey
-          - '"}'
 
 # Creation du Bucket S3
   BucketS3:
@@ -545,200 +517,200 @@ Resources:
       BucketName: bucket-projet-aws
       AccessControl: Private
       PublicAccessBlockConfiguration:
-        BlockPublicAcls: True
-        BlockPublicPolicy: True
-        IgnorePublicAcls: True
-        RestrictPublicBuckets: True
+        BlockPublicAcls: false
+        BlockPublicPolicy: false
+        IgnorePublicAcls: false
+        RestrictPublicBuckets: false
 
 ########## Mise en place des alerte et parametres de surveillance ##########
 
 # Ajout et suppresion d instance EC2 si charge importante ou non
-  AugmentationCharge:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref WebsiteScalingGroup
-      ScalingAdjustment: 1
-      Cooldown: '300'
-    DependsOn: WebsiteScalingGroup
+#   AugmentationCharge:
+#     Type: AWS::AutoScaling::ScalingPolicy
+#     Properties:
+#       AdjustmentType: ChangeInCapacity
+#       AutoScalingGroupName: !Ref WebsiteScalingGroup
+#       ScalingAdjustment: 1
+#       Cooldown: '300'
+#     DependsOn: WebsiteScalingGroup
 
-  DiminutionCharge:
-    Type: AWS::AutoScaling::ScalingPolicy
-    Properties:
-      AdjustmentType: ChangeInCapacity
-      AutoScalingGroupName: !Ref WebsiteScalingGroup
-      ScalingAdjustment: -1
-      Cooldown: '300'
-    DependsOn: WebsiteScalingGroup
+#   DiminutionCharge:
+#     Type: AWS::AutoScaling::ScalingPolicy
+#     Properties:
+#       AdjustmentType: ChangeInCapacity
+#       AutoScalingGroupName: !Ref WebsiteScalingGroup
+#       ScalingAdjustment: -1
+#       Cooldown: '300'
+#     DependsOn: WebsiteScalingGroup
 
-# Ajout adresse mail d'alerte
-  AlarmTopic:
-    Type: AWS::SNS::Topic
-    Properties:
-      DisplayName: Mail pour alerte AWS
-      Subscription:
-          - Endpoint: !Ref MailAlarm
-            Protocol: email
+# # Ajout adresse mail d'alerte
+#   AlarmTopic:
+#     Type: AWS::SNS::Topic
+#     Properties:
+#       DisplayName: Mail pour alerte AWS
+#       Subscription:
+#           - Endpoint: !Ref MailAlarm
+#             Protocol: email
 
-# Parametrage des parametres de l alarme CPU
-  AlarmCPUHight:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: CPU alarme instances EC2
-      AlarmActions:
-        - !Ref AugmentationCharge
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 80
-      ComparisonOperator: GreaterThanThreshold
-      Dimensions:
-      - Name: AutoScalingGroupName
-        Value: !Ref WebsiteScalingGroup
-    DependsOn: WebsiteScalingGroup
+# # Parametrage des parametres de l alarme CPU
+#   AlarmCPUHight:
+#     Type: AWS::CloudWatch::Alarm
+#     Properties:
+#       AlarmDescription: CPU alarme instances EC2
+#       AlarmActions:
+#         - !Ref AugmentationCharge
+#       MetricName: CPUUtilization
+#       Namespace: AWS/EC2
+#       Statistic: Average
+#       Period: 300
+#       EvaluationPeriods: 1
+#       Threshold: 80
+#       ComparisonOperator: GreaterThanThreshold
+#       Dimensions:
+#       - Name: AutoScalingGroupName
+#         Value: !Ref WebsiteScalingGroup
+#     DependsOn: WebsiteScalingGroup
 
-  AlarmCPULow:
-    Type: AWS::CloudWatch::Alarm
-    Properties:
-      AlarmDescription: CPU alarme instances EC2
-      AlarmActions:
-        - !Ref DiminutionCharge
-      MetricName: CPUUtilization
-      Namespace: AWS/EC2
-      Statistic: Average
-      Period: 300
-      EvaluationPeriods: 1
-      Threshold: 50
-      ComparisonOperator: LessThanThreshold
-      Dimensions:
-      - Name: AutoScalingGroupName
-        Value: !Ref WebsiteScalingGroup
-    DependsOn: WebsiteScalingGroup
+#   AlarmCPULow:
+#     Type: AWS::CloudWatch::Alarm
+#     Properties:
+#       AlarmDescription: CPU alarme instances EC2
+#       AlarmActions:
+#         - !Ref DiminutionCharge
+#       MetricName: CPUUtilization
+#       Namespace: AWS/EC2
+#       Statistic: Average
+#       Period: 300
+#       EvaluationPeriods: 1
+#       Threshold: 50
+#       ComparisonOperator: LessThanThreshold
+#       Dimensions:
+#       - Name: AutoScalingGroupName
+#         Value: !Ref WebsiteScalingGroup
+#     DependsOn: WebsiteScalingGroup
 
-########## Creation des instances EC2 en reseau prive C ##########
-# Groupe de securite pour le VPN
-  VPNSecurityGroup:
-    Type:  AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Website EC2 Security Group
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: udp
-          FromPort: 51820
-          ToPort: 51820
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: icmp
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-      VpcId: !Ref MonVPC
+# ########## Creation des instances EC2 en reseau prive C ##########
+# # Groupe de securite pour le VPN
+#   VPNSecurityGroup:
+#     Type:  AWS::EC2::SecurityGroup
+#     Properties:
+#       GroupDescription: Website EC2 Security Group
+#       SecurityGroupEgress:
+#         - IpProtocol: -1
+#           CidrIp: 0.0.0.0/0
+#       SecurityGroupIngress:
+#         - IpProtocol: udp
+#           FromPort: 51820
+#           ToPort: 51820
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: icmp
+#           FromPort: -1
+#           ToPort: -1
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 22
+#           ToPort: 22
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 2049
+#           ToPort: 2049
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 80
+#           ToPort: 80
+#           CidrIp: 0.0.0.0/0
+#       VpcId: !Ref MonVPC
 
-# Groupe de securite pour la vm intranet
-  IntranetSecurityGroup:
-    Type:  AWS::EC2::SecurityGroup
-    Properties:
-      GroupDescription: Website EC2 Security Group
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 0.0.0.0/0
-      SecurityGroupIngress:
-        - IpProtocol: icmp
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 2049
-          ToPort: 2049
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: udp
-          FromPort: 2049
-          ToPort: 2049
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 111
-          ToPort: 111
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: udp
-          FromPort: 111
-          ToPort: 111
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-      VpcId: !Ref MonVPC
+# # Groupe de securite pour la vm intranet
+#   IntranetSecurityGroup:
+#     Type:  AWS::EC2::SecurityGroup
+#     Properties:
+#       GroupDescription: Website EC2 Security Group
+#       SecurityGroupEgress:
+#         - IpProtocol: -1
+#           CidrIp: 0.0.0.0/0
+#       SecurityGroupIngress:
+#         - IpProtocol: icmp
+#           FromPort: -1
+#           ToPort: -1
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 2049
+#           ToPort: 2049
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: udp
+#           FromPort: 2049
+#           ToPort: 2049
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 111
+#           ToPort: 111
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: udp
+#           FromPort: 111
+#           ToPort: 111
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 80
+#           ToPort: 80
+#           CidrIp: 0.0.0.0/0
+#         - IpProtocol: tcp
+#           FromPort: 22
+#           ToPort: 22
+#           CidrIp: 0.0.0.0/0
+#       VpcId: !Ref MonVPC
 
-# Instance EC2 pour Intranet
-  EC2Intranet:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-0fd026dbc511a26fe
-      InstanceType: t2.micro
-      KeyName: Cle_USP10
-      NetworkInterfaces:
-        - DeviceIndex: 0
-          AssociatePublicIpAddress: false
-          GroupSet: 
-            - Ref: IntranetSecurityGroup
-          SubnetId: !Ref PrivateSubnetC
-      UserData:
-        Fn::Base64:
-          Fn::Sub: |
-            #!/bin/bash
-            sudo apt install nfs-common -y
-            sudo mkdir /var/www/html/nfs
-            sudo ip route add 10.35.20.0/24 via ${VPNInstance.PrivateIp}
-            sudo ip route add 192.168.1.0/24 via ${VPNInstance.PrivateIp}
-            sudo mount -v -t nfs 192.168.1.25:/srv/intranet /var/www/html/nfs
+# # Instance EC2 pour Intranet
+#   EC2Intranet:
+#     Type: AWS::EC2::Instance
+#     Properties:
+#       ImageId: ami-0fd026dbc511a26fe
+#       InstanceType: t2.micro
+#       KeyName: Cle_USP10
+#       NetworkInterfaces:
+#         - DeviceIndex: 0
+#           AssociatePublicIpAddress: false
+#           GroupSet: 
+#             - Ref: IntranetSecurityGroup
+#           SubnetId: !Ref PrivateSubnetC
+#       UserData:
+#         Fn::Base64:
+#           Fn::Sub: |
+#             #!/bin/bash
+#             sudo apt install nfs-common -y
+#             sudo mkdir /var/www/html/nfs
+#             sudo ip route add 10.35.20.0/24 via ${VPNInstance.PrivateIp}
+#             sudo ip route add 192.168.1.0/24 via ${VPNInstance.PrivateIp}
+#             sudo mount -v -t nfs 192.168.1.25:/srv/intranet /var/www/html/nfs
 
-# Instance EC2 pour le VPN
-  VPNInstance:
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-0fa5af1a7c44ebe49
-      InstanceType: t2.micro
-      KeyName: Cle_USP10
-      SourceDestCheck: false
-      NetworkInterfaces:
-        - DeviceIndex: 0
-          AssociatePublicIpAddress: false
-          GroupSet:
-            - Ref: VPNSecurityGroup
-          SubnetId: !Ref PrivateSubnetC
+# # Instance EC2 pour le VPN
+#   VPNInstance:
+#     Type: AWS::EC2::Instance
+#     Properties:
+#       ImageId: ami-0fa5af1a7c44ebe49
+#       InstanceType: t2.micro
+#       KeyName: Cle_USP10
+#       SourceDestCheck: false
+#       NetworkInterfaces:
+#         - DeviceIndex: 0
+#           AssociatePublicIpAddress: false
+#           GroupSet:
+#             - Ref: VPNSecurityGroup
+#           SubnetId: !Ref PrivateSubnetC
 
-  BastionEC2:  
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-024527629f55e9322
-      InstanceType: t2.micro
-      SecurityGroupIds:
-        - !Ref VPNSecurityGroup
-      SubnetId: !Ref PublicSubnetC
-      SourceDestCheck: false
-      KeyName: Cle_USP10
-      UserData:
-        Fn::Base64:
-          Fn::Sub: |
-            #!/bin/bash -xe
-            sudo apt update
-            sudo apt upgrade -y
+#   BastionEC2:  
+#     Type: AWS::EC2::Instance
+#     Properties:
+#       ImageId: ami-024527629f55e9322
+#       InstanceType: t2.micro
+#       SecurityGroupIds:
+#         - !Ref VPNSecurityGroup
+#       SubnetId: !Ref PublicSubnetC
+#       SourceDestCheck: false
+#       KeyName: Cle_USP10
+#       UserData:
+#         Fn::Base64:
+#           Fn::Sub: |
+#             #!/bin/bash -xe
+#             sudo apt update
+#             sudo apt upgrade -y
