@@ -9,25 +9,25 @@ Description: >-
 ########## Definition des parametres pour nos outils ##########
 
 Parameters:
-  # DBName:
-  #   Default: WordpressDB
-  #   Description: Nom de la BDD Wordpress
-  #   Type: String
+  DBName:
+    Default: WordpressDB
+    Description: Nom de la BDD Wordpress
+    Type: String
 
-  # DBUser:
-  #   Default: wpuser
-  #   Description: Nom de l'utilisateur Wordpress
-  #   Type: String
+  DBUser:
+    Default: wpuser
+    Description: Nom de l'utilisateur Wordpress
+    Type: String
 
-  # DBPassword:
-  #   Default: BtssioWP13!
-  #   Description: Mon de passe de la BDD Wordpress
-  #   Type: String
+  DBPassword:
+    Default: BtssioWP13!
+    Description: Mon de passe de la BDD Wordpress
+    Type: String
 
-  # DBClass:
-  #   Default: db.t2.micro
-  #   Description: Catégorie/Classe de notre instance RDS
-  #   Type: String
+  DBClass:
+    Default: db.t2.micro
+    Description: Catégorie/Classe de notre instance RDS
+    Type: String
 
   IDWP:
     Default: fj
@@ -360,8 +360,6 @@ Resources:
       InstanceType: t2.micro
       AssociatePublicIpAddress: true
       InstanceMonitoring: true
-      InstanceMarketOptions:
-          MarketType: spot
       KeyName: Cle_USP10
       SecurityGroups:
         - !Ref WebsiteEC2SecurityGroup
@@ -387,13 +385,13 @@ Resources:
             sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wpp10:first
             sudo docker exec WP10 wp core is-installed --allow-root
             if [ $? -eq 1 ];then
-              sudo docker exec WP10 wp core config --dbname=WordpressDB --dbuser=wpuser --dbpass=BtssioWP13! --dbhost=${MyDBWP.Endpoint.Address}:3306 --allow-root
+              sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDBWP.Endpoint.Address}:3306 --allow-root
               sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title='WordPress P10' --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
               sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate --allow-root
               sudo docker exec WP10 wp plugin update --all --allow-root
               sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
             else
-              sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
+              echo "Le fichier wp-config existe déjà."
             fi
             sudo docker exec WP10 chown -R www-data /var/www/html/
     DependsOn:
@@ -439,11 +437,11 @@ Resources:
     Type: AWS::RDS::DBInstance
     Properties:
       AllocatedStorage: '5'
-      DBInstanceClass: db.t2.micro
-      DBName: WordpressDB
+      DBInstanceClass: !Ref DBClass
+      DBName: !Ref DBName
       Engine: mariadb
-      MasterUsername: wpuser
-      MasterUserPassword: BtssioWP13!
+      MasterUsername: !Ref DBUser
+      MasterUserPassword: !Ref DBPassword
       MultiAZ: True
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
