@@ -23,7 +23,7 @@ Parameters:
     Type: String
 
   DBPassword:
-    Default: BtssioWP13!
+    Default: wpuser
     Description: Mon de passe de la BDD Wordpress
     Type: String
 
@@ -34,12 +34,12 @@ Parameters:
 
 # Paramètres pour notre WordPress
   IDWP:
-    Default: fj
+    Default: toto
     Description: Nom compte admin Wordpress
     Type: String
 
   PasswordWP:
-    Default: Toto66!
+    Default: Toto!
     Description: Mot de passe Admin wordpress
     Type: String
   
@@ -50,7 +50,7 @@ Parameters:
   
   # Adresse mail pour les alèrtes du LoadBalancer
   MailAlarm:
-    Default: la-poubelle00@hotmail.com
+    Default: your-mailbox00@mailbox.com
     Description: Mail pour les alertes EC2
     Type: String
 
@@ -128,7 +128,6 @@ Resources:
     Properties:
       AvailabilityZone: us-west-1c
       CidrBlock: 10.0.3.0/24
-      #A SUPPRIMER UNE FOIS TOUT OK!!!
       MapPublicIpOnLaunch: true
       Tags:
         - Key: Name
@@ -387,7 +386,7 @@ Resources:
             sudo chmod +x /usr/local/bin/docker-compose
             sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
-            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wpp10:first
+            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 <votre image docker>
             sudo docker exec WP10 apt update
             sudo docker exec WP10 apt upgrade -y
             sudo docker exec WP10 wp core is-installed --allow-root
@@ -678,9 +677,9 @@ Resources:
             #!/bin/bash
             sudo apt install nfs-common
             sudo mkdir /var/www/html/nfs
-            sudo ip route add 10.35.20.0/24 via ${VPNInstance.PrivateIp}
-            sudo ip route add 192.168.1.0/24 via ${VPNInstance.PrivateIp}
-            sudo mount -v -t nfs 192.168.1.25:/srv/intranet /var/www/html/nfs
+            sudo ip route add <ip réseau vpn>/24 via ${VPNInstance.PrivateIp}
+            sudo ip route add <ip réseau chez vous>/24 via ${VPNInstance.PrivateIp}
+            sudo mount -v -t nfs <ip serveur de fichier>:/srv/intranet /var/www/html/nfs
 
 # Instance EC2 pour le VPN
   VPNInstance:
@@ -696,21 +695,3 @@ Resources:
           GroupSet:
             - Ref: VPNSecurityGroup
           SubnetId: !Ref PrivateSubnetC
-
-# Instance EC2 pour se connecter en SSH sur le sous-réseau C
-  BastionEC2:  
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-024527629f55e9322
-      InstanceType: t2.micro
-      SecurityGroupIds:
-        - !Ref VPNSecurityGroup
-      SubnetId: !Ref PublicSubnetC
-      SourceDestCheck: false
-      KeyName: Cle_USP10
-      UserData:
-        Fn::Base64:
-          Fn::Sub: |
-            #!/bin/bash -xe
-            sudo apt update
-            sudo apt upgrade -y
