@@ -18,7 +18,7 @@ Parameters:
     Type: String
 
   DBUser:
-    Default: wp_user
+    Default: wpuser
     Description: Nom de l'utilisateur Wordpress
     Type: String
 
@@ -50,7 +50,7 @@ Parameters:
   
   # Adresse mail pour les alèrtes du LoadBalancer
   MailAlarm:
-    Default: your-mail@mail.com
+    Default: your-mailbox@mailbox.com
     Description: Mail pour les alertes EC2
     Type: String
 
@@ -663,7 +663,7 @@ Resources:
   EC2Intranet:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0fd026dbc511a26fe
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       KeyName: Cle_USP10
       NetworkInterfaces:
@@ -686,7 +686,7 @@ Resources:
   VPNInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0fa5af1a7c44ebe49
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       KeyName: Cle_USP10
       SourceDestCheck: false
