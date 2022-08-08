@@ -69,7 +69,6 @@ Resources:
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
       CidrBlock: 10.0.101.0/24
       Tags:
@@ -372,7 +371,7 @@ Resources:
             sudo amazon-linux-extras install epel -y
             sudo yum install stress -y
             sudo yum install htop -y
-            sudo amazon-linux-extras install docker -y
+            sudo yum install docker -y
             sudo yum update -y
             sudo yum upgrade -y
             sudo systemctl enable --now docker.service
@@ -382,17 +381,23 @@ Resources:
             sudo chmod +x /usr/local/bin/docker-compose
             sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
+            sudo cp /srv/wordpress/wp-config-sample.php /srv/wordpress/wp-config.php
             sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 fanliaa/wpp10:first
-            sudo docker exec WP10 wp core is-installed --allow-root
-            if [ $? -eq 1 ];then
-              sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDBWP.Endpoint.Address}:3306 --allow-root
-              sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title='WordPress P10' --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
-              sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate --allow-root
-              sudo docker exec WP10 wp plugin update --all --allow-root
-              sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
-            else
-              echo "Le fichier wp-config existe déjà."
-            fi
+            # sudo chmod 644 /srv/wordpress/
+            # sudo cp /srv/wordpress/wp-config-sample.php /srv/wordpress/wp-config.php
+            # sudo docker exec WP10 wp core download --allow-root
+            # while [ ! -f /srv/wordpress/wp-config.php ] ; do echo "On attend le fichier wp-config.php..." ; sleep 1 ; done
+            # sudo docker exec WP10 wp core is-installed --allow-root
+            # if [ $? -eq 1 ];then
+            sleep 60
+            sudo docker exec WP10 wp core config --dbname=${DBName} --dbuser=${DBUser} --dbpass=${DBPassword} --dbhost=${MyDBWP.Endpoint.Address}:3306 --allow-root
+            sudo docker exec WP10 wp core install --url=http://${LoadBalancer.DNSName} --title='WordPress_P10' --admin_user=${IDWP} --admin_password=${PasswordWP} --admin_email=${MailWP} --allow-root
+            sudo docker exec WP10 wp plugin install amazon-s3-and-cloudfront --activate --allow-root
+            sudo docker exec WP10 wp plugin update --all --allow-root
+            sudo sed -i "2i\define( 'AS3CF_SETTINGS', serialize( array( 'provider' => 'aws', 'access-key-id' => '${MyAccessKeyS3}', 'secret-access-key' => '${MyAccessKeyS3.SecretAccessKey}', 'bucket' => '${BucketS3}', 'copy-to-s3' => true, 'serve-from-s3' => true, )));\n" /srv/wordpress/wp-config.php
+            # else
+            # echo "Le fichier wp-config existe déjà."
+            # fi
             sudo docker exec WP10 chown -R www-data /var/www/html/
     DependsOn:
       - "MonVPC"
@@ -408,18 +413,11 @@ Resources:
     Type: AWS::EC2::SecurityGroup
     Properties:
       GroupDescription: RDS Security Group
-      SecurityGroupEgress:
-        - IpProtocol: -1
-          CidrIp: 10.0.0.0/16
       SecurityGroupIngress:
         - IpProtocol: tcp
           FromPort: 3306
           ToPort: 3306
-          CidrIp: 10.0.0.0/16
-        - IpProtocol: tcp
-          FromPort: 3306
-          ToPort: 3306
-          CidrIp: 10.0.0.0/16
+          CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
 # Creation groupe sous-reseau RDS
@@ -436,16 +434,17 @@ Resources:
   MyDBWP:
     Type: AWS::RDS::DBInstance
     Properties:
-      AllocatedStorage: '5'
+      AutoMinorVersionUpgrade: true
+      AllocatedStorage: '20'
       DBInstanceClass: !Ref DBClass
       DBName: !Ref DBName
       Engine: mariadb
       MasterUsername: !Ref DBUser
       MasterUserPassword: !Ref DBPassword
-      MultiAZ: True
+      MultiAZ: true
       DBSubnetGroupName: !Ref DBSubnetGroup
       VPCSecurityGroups:
-        - !GetAtt RDSSecurityGroup.GroupId
+        - !Ref RDSSecurityGroup
 
 ########## Mise en place de l'EFS pour Wordpress ##########
 
