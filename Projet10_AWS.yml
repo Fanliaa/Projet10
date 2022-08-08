@@ -6,21 +6,24 @@
 AWSTemplateFormatVersion: 2010-09-09
 Description: >-
   AWS CloudFormation VPC + Infrastructure Template P10
+
 ########## Definition des parametres pour nos outils ##########
 
 Parameters:
+
+# Paramètres pour notre base de donnée
   DBName:
     Default: WordpressDB
     Description: Nom de la BDD Wordpress
     Type: String
 
   DBUser:
-    Default: wpuser
+    Default: wp_user
     Description: Nom de l'utilisateur Wordpress
     Type: String
 
   DBPassword:
-    Default: BtssioWP13!
+    Default: wpuser
     Description: Mon de passe de la BDD Wordpress
     Type: String
 
@@ -29,13 +32,14 @@ Parameters:
     Description: Catégorie/Classe de notre instance RDS
     Type: String
 
+# Paramètres pour notre WordPress
   IDWP:
-    Default: fj
+    Default: toto
     Description: Nom compte admin Wordpress
     Type: String
 
   PasswordWP:
-    Default: Toto66!
+    Default: Toto!
     Description: Mot de passe Admin wordpress
     Type: String
   
@@ -44,12 +48,13 @@ Parameters:
     Description: Mail Wordpress
     Type: String
   
+  # Adresse mail pour les alèrtes du LoadBalancer
   MailAlarm:
-    Default: la-poubelle00@hotmail.com
+    Default: your-mail@mail.com
     Description: Mail pour les alertes EC2
     Type: String
 
-########## Definition des Ressources necessaires pour notre reseau ##########
+########## Definition des Ressources nécessaires pour notre réseau ##########
 
 Resources:
 
@@ -64,8 +69,9 @@ Resources:
         - Key: Name
           Value: "MonVPC"
 
-########## Creation de nos sous-reseaux prives et publics ##########
+########## Creation de nos sous-reseaux privés et publics ##########
 
+# Sous-réseaux privés
   PrivateSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
@@ -79,7 +85,6 @@ Resources:
   PrivateSubnetB:
       Type: AWS::EC2::Subnet
       Properties:
-        # AvailabilityZone: eu-west-3b
         AvailabilityZone: us-west-1c
         CidrBlock: 10.0.102.0/24
         Tags:
@@ -90,18 +95,17 @@ Resources:
   PrivateSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
-      # AvailabilityZone: eu-west-3c
       AvailabilityZone: us-west-1c
       CidrBlock: 10.0.103.0/24
       Tags:
         - Key: Name
           Value: MonVPC-private-c
       VpcId: !Ref MonVPC
-        
+
+# Sous-réseaux publics
   PublicSubnetA:
     Type: AWS::EC2::Subnet
     Properties:
-      # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1a
       CidrBlock: 10.0.1.0/24
       Tags:
@@ -112,7 +116,6 @@ Resources:
   PublicSubnetB:
     Type: AWS::EC2::Subnet
     Properties:
-      # AvailabilityZone: eu-west-3b
       AvailabilityZone: us-west-1c
       CidrBlock: 10.0.2.0/24
       Tags:
@@ -123,7 +126,6 @@ Resources:
   PublicSubnetC:
     Type: AWS::EC2::Subnet
     Properties:
-      # AvailabilityZone: eu-west-3a
       AvailabilityZone: us-west-1c
       CidrBlock: 10.0.3.0/24
       #A SUPPRIMER UNE FOIS TOUT OK!!!
@@ -133,7 +135,7 @@ Resources:
           Value: MonVPC-public-c
       VpcId: !Ref MonVPC
 
-########## Creation de la passerelle internet Pour les reseaux publics A et B ##########
+########## Creation de la passerelle internet pour les réseaux publics ##########
 
   InternetGateway:
     Type: AWS::EC2::InternetGateway
@@ -150,6 +152,8 @@ Resources:
       InternetGatewayId: !Ref InternetGateway
 
 ########## Creation de la NAT Gateway Pour le reseau prive C ##########
+
+# Création d'une IP publique Elastique
   NatEIPC:
     Type: AWS::EC2::EIP
     Properties:
@@ -160,7 +164,7 @@ Resources:
     Properties:
       AllocationId: !GetAtt NatEIPC.AllocationId
       SubnetId: !Ref PublicSubnetC
-      ConnectivityType: public
+      # ConnectivityType: public
       Tags:
         - Key: Name
           Value: natgateway-private-c
@@ -168,7 +172,7 @@ Resources:
 
 ########## Definition de la table de routage ##########
 
-# Table de routage pour le sous-reseau A
+# Table de routage pour le sous-réseau public A
   PublicRouteTableA:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -176,7 +180,7 @@ Resources:
       Tags:
         - Key: Name
           Value: MonVPC-route-public-a
-  
+
   AttachPublicRouteTableA:
     Type: AWS::EC2::SubnetRouteTableAssociation
     Properties:
@@ -190,7 +194,7 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableA
 
-# Table de routage pour le sous-reseau B
+# Table de routage pour le sous-réseau public B
   PublicRouteTableB:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -212,7 +216,7 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableB
   
-  # Table de routage pour le sous-reseau public C, VPN
+  # Table de routage pour le sous-réseau public C [VPN]
   PublicRouteTableC:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -234,7 +238,7 @@ Resources:
       GatewayId: !Ref InternetGateway
       RouteTableId: !Ref PublicRouteTableC
 
-  # Table de routage pour le sous-reseau prive C, VPN
+  # Table de routage pour le sous-réseau privé C [VPN]
   PrivateRouteTableC:
     Type: AWS::EC2::RouteTable
     Properties:
@@ -256,16 +260,17 @@ Resources:
       NatGatewayId: !Ref NatGateway
       RouteTableId: !Ref PrivateRouteTableC
     DependsOn: NatGateway
-  
-  # VPNRouteC:
-  #   Type: AWS::EC2::Route
-  #   Properties:
-  #     DestinationCidrBlock: 192.168.56.0/24
-  #     InstanceId: !Ref VPNInstance
-  #     RouteTableId: !Ref PrivateRouteTableC
-  #   DependsOn: NatGateway
 
-# Creation du groupe de securite (firewall virtuel)
+# Route de destination du VPN Client
+  VPNRouteC:
+    Type: AWS::EC2::Route
+    Properties:
+      DestinationCidrBlock: 192.168.1.0/24
+      InstanceId: !Ref VPNInstance
+      RouteTableId: !Ref PrivateRouteTableC
+    DependsOn: NatGateway
+
+########## Création du groupe de sécurité des EC2 Wordpress (firewall virtuel) ##########
   WebsiteEC2SecurityGroup:
     Type:  AWS::EC2::SecurityGroup
     Properties:
@@ -279,12 +284,12 @@ Resources:
           ToPort: 80
           CidrIp: 0.0.0.0/0
         - IpProtocol: tcp
-          FromPort: 22
-          ToPort: 22
-          CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
           FromPort: 53
           ToPort: 53
+          CidrIp: 0.0.0.0/0
+        - IpProtocol: tcp
+          FromPort: 22
+          ToPort: 22
           CidrIp: 0.0.0.0/0
         - IpProtocol: icmp
           FromPort: -1
@@ -294,7 +299,7 @@ Resources:
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
 
-# Creation du repartiteur de charge
+# Création du répartiteur de charge
   TargetGroup:
     Type: AWS::ElasticLoadBalancingV2::TargetGroup
     Properties:
@@ -330,6 +335,7 @@ Resources:
         - Type: forward
           TargetGroupArn: !Ref TargetGroup
 
+# Création de l'AutoScaling
   WebsiteScalingGroup:
     Type: AWS::AutoScaling::AutoScalingGroup
     Properties:
@@ -351,7 +357,7 @@ Resources:
           - autoscaling:EC2_INSTANCE_TERMINATE
           - autoscaling:EC2_INSTANCE_TERMINATE_ERROR
 
-# Creation de l'auto scaling group
+# Creation de l'AutoScalingGroup pour nos instances EC2 Wordpress
   WordPressLaunchConfig:
     Type: AWS::AutoScaling::LaunchConfiguration
     Properties:
@@ -402,9 +408,9 @@ Resources:
       - "LoadBalancer"
       - "MyDBWP"
 
-########## Mise en place du service RDS ##########
+########## Mise en place du service RDS - Base de données ##########
 
-# Creation du groupe de securite RDS
+# Création du groupe de securite RDS
   RDSSecurityGroup:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -416,17 +422,17 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
-# Creation groupe sous-reseau RDS
+# Création du groupe sous-réseau RDS
   DBSubnetGroup:
     Type: AWS::RDS::DBSubnetGroup
     Properties:
-      DBSubnetGroupDescription: Groupe de sous-reseau RDS
+      DBSubnetGroupDescription: Groupe de sous-réseau RDS
       DBSubnetGroupName: RDSGroup
       SubnetIds:
         - !Ref PrivateSubnetA
         - !Ref PrivateSubnetB
 
-# Creation du RDS
+# Création du RDS
   MyDBWP:
     Type: AWS::RDS::DBInstance
     Properties:
@@ -442,9 +448,9 @@ Resources:
       VPCSecurityGroups:
         - !Ref RDSSecurityGroup
 
-########## Mise en place de l'EFS pour Wordpress ##########
+########## Mise en place de l'EFS pour stocker le paramétrage de notre Wordpress ##########
 
-# Creation du groupe de securite EFS
+# Création du groupe de sécurite EFS
   SecurityGroupEFS:
     Type: AWS::EC2::SecurityGroup
     Properties:
@@ -456,7 +462,7 @@ Resources:
           CidrIp: 10.0.0.0/16
       VpcId: !Ref MonVPC
 
-  # Creation des cibles de montage pour chaque Subnet
+  # Création des cibles de montage pour chaque sous-réseaux public
   MountTargetA:
     Type: AWS::EFS::MountTarget
     Properties: 
@@ -473,7 +479,7 @@ Resources:
       SecurityGroups: 
         - !Ref SecurityGroupEFS
 
-  # Creation du EFS
+  # Création de l'EFS
   StockageEFS:
     Type: AWS::EFS::FileSystem
     Properties:
@@ -486,7 +492,8 @@ Resources:
           Value: NomTest
 
 ########## Mise en place du Bucket S3 pour les images Wordpress ##########
-# Creation d'un utilisateur pour Bucket S3
+
+# Création d'un utilisateur pour Bucket S3
   GroupeS3:
     Type: AWS::IAM::Group
     Properties:
@@ -503,7 +510,7 @@ Resources:
     Properties:
       UserName: !Ref UserS3
 
-# Creation du Bucket S3
+# Création du Bucket S3
   BucketS3:
     Type: AWS::S3::Bucket
     Properties:
@@ -515,9 +522,9 @@ Resources:
         IgnorePublicAcls: false
         RestrictPublicBuckets: false
 
-########## Mise en place des alerte et parametres de surveillance ##########
+########## Mise en place des alertes et paramètres de surveillance ##########
 
-# Ajout et suppresion d instance EC2 si charge importante ou non
+# Ajout d'instance EC2 si charge importante
   AugmentationCharge:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -527,6 +534,7 @@ Resources:
       Cooldown: '300'
     DependsOn: WebsiteScalingGroup
 
+# Supperssion d'instance EC2 si charge moins importante
   DiminutionCharge:
     Type: AWS::AutoScaling::ScalingPolicy
     Properties:
@@ -536,7 +544,7 @@ Resources:
       Cooldown: '300'
     DependsOn: WebsiteScalingGroup
 
-# Ajout adresse mail d'alerte
+# Ajout adresse mail d'alèrte
   AlarmTopic:
     Type: AWS::SNS::Topic
     Properties:
@@ -545,7 +553,7 @@ Resources:
           - Endpoint: !Ref MailAlarm
             Protocol: email
 
-# Parametrage des parametres de l alarme CPU
+# Paramétrage de l'alarme CPU à 80%
   AlarmCPUHight:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -564,6 +572,7 @@ Resources:
         Value: !Ref WebsiteScalingGroup
     DependsOn: WebsiteScalingGroup
 
+# Paramétrage de l'alarme CPU à moins de 80%
   AlarmCPULow:
     Type: AWS::CloudWatch::Alarm
     Properties:
@@ -583,7 +592,8 @@ Resources:
     DependsOn: WebsiteScalingGroup
 
 ########## Creation des instances EC2 en reseau prive C ##########
-# Groupe de securite pour le VPN
+
+# Groupe de sécurite pour le VPN
   VPNSecurityGroup:
     Type:  AWS::EC2::SecurityGroup
     Properties:
@@ -608,13 +618,9 @@ Resources:
           FromPort: 2049
           ToPort: 2049
           CidrIp: 0.0.0.0/0
-        - IpProtocol: tcp
-          FromPort: 80
-          ToPort: 80
-          CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
-# Groupe de securite pour la vm intranet
+# Groupe de sécurite pour l'EC2 intranet
   IntranetSecurityGroup:
     Type:  AWS::EC2::SecurityGroup
     Properties:
@@ -653,7 +659,7 @@ Resources:
           CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
-# Instance EC2 pour Intranet
+# Instance EC2 pour l'Intranet
   EC2Intranet:
     Type: AWS::EC2::Instance
     Properties:
@@ -670,7 +676,7 @@ Resources:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
-            sudo apt install nfs-common -y
+            sudo apt install nfs-common
             sudo mkdir /var/www/html/nfs
             sudo ip route add 10.35.20.0/24 via ${VPNInstance.PrivateIp}
             sudo ip route add 192.168.1.0/24 via ${VPNInstance.PrivateIp}
@@ -690,20 +696,3 @@ Resources:
           GroupSet:
             - Ref: VPNSecurityGroup
           SubnetId: !Ref PrivateSubnetC
-#
-  BastionEC2:  
-    Type: AWS::EC2::Instance
-    Properties:
-      ImageId: ami-024527629f55e9322
-      InstanceType: t2.micro
-      SecurityGroupIds:
-        - !Ref VPNSecurityGroup
-      SubnetId: !Ref PublicSubnetC
-      SourceDestCheck: false
-      KeyName: Cle_USP10
-      UserData:
-        Fn::Base64:
-          Fn::Sub: |
-            #!/bin/bash -xe
-            sudo apt update
-            sudo apt upgrade -y
