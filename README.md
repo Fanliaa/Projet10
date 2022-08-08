@@ -55,7 +55,7 @@ net.ipv4.ip_forward = 1
 ```
 *Maintenant, pour notre client VPN, voici la partie à ajouter dans le fichier .YML à l'endroit où se trouve le client VPN:*
 ```
-UserData:
+    UserData:
         Fn::Base64:
           Fn::Sub: |
             #!/bin/bash
