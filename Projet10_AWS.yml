@@ -290,10 +290,6 @@ Resources:
           FromPort: 22
           ToPort: 22
           CidrIp: 0.0.0.0/0
-        - IpProtocol: icmp
-          FromPort: -1
-          ToPort: -1
-          CidrIp: 0.0.0.0/0
       VpcId: !Ref MonVPC
 
 ########## Mise en place de la partie publique de l'infrastructure ##########
@@ -362,7 +358,7 @@ Resources:
     Properties:
       ImageId: ami-0e4d9ed95865f3b40
       InstanceType: t2.micro
-      AssociatePublicIpAddress: true
+      AssociatePublicIpAddress: false
       InstanceMonitoring: true
       KeyName: Cle_USP10
       SecurityGroups:
@@ -386,7 +382,7 @@ Resources:
             sudo chmod +x /usr/local/bin/docker-compose
             sudo ln -s /usr/local/bin/docker-compose /usr/bin/docker-compose
             sudo mount -t efs -o tls ${StockageEFS}:/ /srv/wordpress
-            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 <votre image docker>
+            sudo docker run --volume=/srv/wordpress:/var/www/html -d -ti -p 80:80 --name WP10 <votre image docker>:<votre tag d'image>
             sudo docker exec WP10 apt update
             sudo docker exec WP10 apt upgrade -y
             sudo docker exec WP10 wp core is-installed --allow-root
@@ -612,7 +608,7 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.0.0/16
         - IpProtocol: tcp
           FromPort: 2049
           ToPort: 2049
@@ -655,14 +651,14 @@ Resources:
         - IpProtocol: tcp
           FromPort: 22
           ToPort: 22
-          CidrIp: 0.0.0.0/0
+          CidrIp: 10.0.0.0/16
       VpcId: !Ref MonVPC
 
 # Instance EC2 pour l'Intranet
   EC2Intranet:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0fd026dbc511a26fe
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       KeyName: Cle_USP10
       NetworkInterfaces:
@@ -685,7 +681,7 @@ Resources:
   VPNInstance:
     Type: AWS::EC2::Instance
     Properties:
-      ImageId: ami-0fa5af1a7c44ebe49
+      ImageId: ami-024527629f55e9322
       InstanceType: t2.micro
       KeyName: Cle_USP10
       SourceDestCheck: false
