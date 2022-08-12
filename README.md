@@ -3,7 +3,7 @@
 *Exemple d'un script d'automatisation AWS pour la création d'une structure complète comprenant des EC2, un RDS, un ELB, un AutoScaling, un BucketS3 et un EFS. Ce projet a été créé dans le but de se former à la création de fichier Cloudformation d'automatisation au format YAML, ce projet fait partit de la formation d'Administrateur Système et Cloud d'OpenClassRooms.*
 
 ## __Paramétrage nécessaire pour le bon fonctionnement de ce script__
-Pour ce projet une VM VPN est à créée (*VM serveur*). J'ai utilisée le VPN WireGuard pour ce projet, vous aurez également besoin d'un serveur de fichier. (*__Ici, j'utilise un environnement sous Debian 11 pour mes deux machines.__*)
+Pour ce projet une VM VPN et Intranet sont à créer chez vous (*VM serveur*). J'ai utilisée le VPN WireGuard pour ce projet.(*__Ici, j'utilise un environnement sous Debian 11 pour mes deux machines, les machines Wordpress sur AWS sont des Amazon Linux.__*)
 
 ### __Création de notre VM VPN Wireguard__
 *Ces commandes sont à faire sur vos deux VM (client et serveur).*
