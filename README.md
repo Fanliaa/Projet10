@@ -1,4 +1,4 @@
-# Projet 10 OpenClassRooms - Aws et CloudFormation
+Aws et CloudFormation
 
 *Exemple d'un script d'automatisation AWS pour la création d'une structure complète comprenant des EC2, un RDS, un ELB, un AutoScaling, un BucketS3 et un EFS. Ce projet a été créé dans le but de se former à la création de fichier Cloudformation d'automatisation au format YAML, ce projet fait partit de la formation d'Administrateur Système et Cloud d'OpenClassRooms.*
 
